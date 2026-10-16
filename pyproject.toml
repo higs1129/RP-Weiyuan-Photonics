@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rp-weiyuan-photonics"
+version = "0.3.0"
+description = "RP*微源光子测控平台"
+requires-python = ">=3.10,<3.11"
+dependencies = ["a221-workbench==0.2.24"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+rp_weiyuan = ["static/*.html", "static/*.css", "static/*.js", "static/brand/*.png"]

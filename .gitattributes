@@ -1,0 +1,21 @@
+*.py text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.lock text eol=lf
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.whl binary
+*.zip binary
+*.exe binary
+*.dll binary
+*.sys binary
+*.cat binary
+*.png binary
+# Signed drivers and hashed offline resources must keep their exact bytes on checkout.
+dependencies/** -text
+dependencies/manifest.json text eol=lf
+dependencies/PROVENANCE.json text eol=lf

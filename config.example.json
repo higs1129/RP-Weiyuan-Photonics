@@ -1,0 +1,25 @@
+{
+  "rp_host": "RP-f0fb33",
+  "input_ranges": {
+    "in1": "HV",
+    "in2": "LV"
+  },
+  "rf_chain": {
+    "input": "in2",
+    "bias_tee_enabled": false,
+    "bias_tee_insertion_loss_db": 0,
+    "amplifier_enabled": false,
+    "amplifier_gain_db": 23,
+    "highz_correction_db": 6.020599913279624,
+    "load_ohm": 50
+  },
+  "slave": 1,
+  "rp_console_port": null,
+  "uart_device": null,
+  "uart_url": null,
+  "pyrpl_python": null,
+  "installation": {
+    "python_path": null,
+    "allow_downloads": true
+  }
+}
