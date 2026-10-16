@@ -49,14 +49,15 @@ class Session:
         self.laser_connected = False
         self.laser_error = None
         self.connection_setup = {'stage': '尚未连接', 'network': None, 'uart': None}
-        self.runtime = BridgeRuntime(bridge, state_dir=configuration_dir('weiyuan_rp') / '.runtime', python=self.config.get('pyrpl_python'), auto_select=auto_bridge)
+        self.runtime = BridgeRuntime(bridge, state_dir=configuration_dir('weiyuan_rp') / '.runtime', python=self.config.get('pyrpl_python'), auto_select=auto_bridge, upgrade_idle=True)
         self.live = LiveAcquisition(self.rp, simulated=False)
         self.live.validate_capture = self.validate_capture
         self.lock = LockController(self.rp, self.live, self.config.get('lock_defaults'))
         self.live.gate = self.lock.gate
+        self._acquisition_control = threading.RLock()
 
     def info(self):
-        return {'ok': True, 'simulated': False, 'host': self.rp.host, 'connected': self.rp.connected, 'lock': self.lock.status(), 'lock_defaults': self.lock.defaults, 'laser_connected': self.laser_connected, 'laser_error': self.laser_error, 'bridge_url': self.rp.client.base, 'rp_address': (self.rp.bridge_status or {}).get('bridge', {}).get('hostname') if self.rp.connected else None, 'uart_url': getattr(self.laser.transport, 'base_url', None), 'laser_limits': LIMITS, 'laser_initial': INITIAL, 'source_version': self.config.get('source_version', ''), 'connection_health': self.connection_monitor.snapshot(), 'connection_diagnostics': self.connection_setup.get('diagnostics'), 'input_ranges': self.input_ranges, 'rf_chain': self.config.get('rf_chain'), 'rf_correction_expected': self.rf_correction, 'rf_correction_readback': self.rf_readback}
+        return {'ok': True, 'simulated': False, 'host': self.rp.host, 'connected': self.rp.connected, 'periodic_burst_supported': bool(self.rp.connected and (self.rp.bridge_status or {}).get('excitation_protocol', 0) >= 3), 'excitation_supported': bool(self.rp.connected and (self.rp.bridge_status or {}).get('excitation_protocol', 0) >= 2), 'lock': self.lock.status(), 'lock_defaults': self.lock.defaults, 'laser_connected': self.laser_connected, 'laser_error': self.laser_error, 'bridge_url': self.rp.client.base, 'rp_address': (self.rp.bridge_status or {}).get('bridge', {}).get('hostname') if self.rp.connected else None, 'uart_url': getattr(self.laser.transport, 'base_url', None), 'laser_limits': LIMITS, 'laser_initial': INITIAL, 'source_version': self.config.get('source_version', ''), 'connection_health': self.connection_monitor.snapshot(), 'connection_diagnostics': self.connection_setup.get('diagnostics'), 'input_ranges': self.input_ranges, 'rf_chain': self.config.get('rf_chain'), 'rf_correction_expected': self.rf_correction, 'rf_correction_readback': self.rf_readback}
 
     def check_rf_correction(self, *, apply=False):
         if self.rf_correction is not None:
@@ -171,6 +172,45 @@ class Session:
         return result
 
     def dispatch(self, action, body):
+        if action == 'excitation/plan':
+            from a221_workbench.instruments.redpitaya.excitation import burst_capture_plan
+            return {'ok': True, **burst_capture_plan(body['frequency'], body['cycles'])}
+        if action == 'live/armed':
+            state = self.live.read(body['run_id'])
+            if not state['running'] or self.live.kind != 'scope':
+                raise RuntimeError('同步采集未运行，尚未发送 burst')
+            return self.rp.client.request('/scope/armed', timeout_s=3)
+        if action.startswith('excitation/'):
+            if not self.rp.connected:
+                raise RuntimeError('RP 尚未连接；未发送激励控制请求')
+            if not (self.rp.bridge_status or {}).get('supports_excitation') or (action == 'excitation/run' and (self.rp.bridge_status or {}).get('excitation_protocol', 0) < 2):
+                raise RuntimeError('设备后台仍是旧版，未发送激励控制请求。请暂停采集、停止守护，在“仪器连接”点击“重启 RP 后台”；关闭网页或重开平台不会更新这个后台。')
+        if action in ('excitation/stop', 'excitation/keepalive'):
+            return self.rp.excitation.control(action.split('/')[1], body['run_id'])
+        if action == 'excitation/run':
+            from a221_workbench.instruments.redpitaya.excitation import validate
+            settings = validate(body['settings'])
+            if settings['mode'] == 'periodic_burst' and (self.rp.bridge_status or {}).get('excitation_protocol', 0) < 3:
+                raise RuntimeError('当前后台不支持周期 burst；请停止采集和守护后重启 RP 后台')
+            with self._acquisition_control:
+                before = self.lock.gate()
+                if not before['ready']:
+                    raise RuntimeError('正在捕获或重锁，请等待锁定稳定后发送激励')
+                if settings['observe'] and settings['mode'] == 'burst':
+                    self.live.stop_and_wait()
+                result = self.rp.excitation.run(settings, run_id=body['run_id'])
+                if 'capture' in result:
+                    after = self.lock.gate()
+                    if not after['ready'] or before['epoch'] != after['epoch']:
+                        raise RuntimeError('激励采集期间锁定状态变化，已丢弃本帧')
+                    result['capture']['lock_context'] = after
+                    result['capture'] = self.validate_capture(result['capture'])
+                return result
+        if action == 'live/release-wait':
+            with self._acquisition_control:
+                self.live.read(body['run_id'], pause=True)
+                self.live.stop_and_wait()
+                return {'ok': True}
         if action == 'connection/check':
             return {'ok': True, 'connection_health': self.connection_monitor.check(self)}
         if action == 'lock':
@@ -182,7 +222,11 @@ class Session:
                 raise RuntimeError('正在采集锁定参考，请稍后开始观察')
             if body['kind'] == 'spectrum':
                 self.check_rf_correction()
-            return self.live.start(body['kind'], self.observation_settings(body['kind'], body.get('settings', {}), view=body.get('view', 'time')), fps=float(body.get('fps', 8)), timeout_s=float(body.get('timeout_s', 20)))
+            with self._acquisition_control:
+                settings = self.observation_settings(body['kind'], body.get('settings', {}), view=body.get('view', 'time'))
+                if body['kind'] == 'scope' and settings.get('trigger_source') == 'asg1' and not (self.rp.bridge_status or {}).get('scope_trigger_wait_revision'):
+                    raise RuntimeError('RP 后台尚未更新触发等待修复；请暂停采集、停止激励和守护，再在仪器连接中重启 RP 后台')
+                return self.live.start(body['kind'], settings, fps=float(body.get('fps', 8)), timeout_s=float(body.get('timeout_s', 20)))
         if action in ('live/latest', 'live/pause', 'live/release'):
             return self.live.read(body['run_id'], after=int(body.get('after', 0)), full=action == 'live/pause', pause=action != 'live/latest')
         if action == 'stop' and self.live.busy:
@@ -244,6 +288,10 @@ class Session:
                     except BridgeConnectionLost as exc:
                         if not self.runtime:
                             raise
+                        # A lost socket does not prove the FPGA outputs are idle.
+                        # Preserve the apparatus until idle can be read back.
+                        from a221_workbench.instruments.redpitaya.bridge_version import assert_idle
+                        assert_idle(self.runtime.client)
                         # Only an explicit connect action may recover once. No
                         # retries of acquisition or device writes are introduced.
                         self.connection_setup['recovery_reason'] = str(exc)
@@ -316,9 +364,14 @@ class Session:
 
     def observation_settings(self, kind, settings, *, view='time'):
         if kind == 'scope':
+            settings = dict(settings)
+            source = settings.pop('trigger_source', 'immediately')
+            show_source = settings.pop('show_source', False)
+            if source not in ('immediately', 'asg1') or not isinstance(show_source, bool):
+                raise ValueError('不支持的时域触发或显示选项')
             sweep_view = view == 'initialize' and self.lock.status()['state'] in ('idle', 'stopped', 'sweeping')
-            return {**settings, 'input1': 'in1', 'input2': 'asg0' if sweep_view else 'in2',
-                    'trigger_source': 'asg0' if sweep_view else 'immediately',
+            return {**settings, 'input1': 'asg1' if view == 'time' and show_source else 'in1', 'input2': 'asg0' if sweep_view else 'in2',
+                    'trigger_source': 'asg0' if sweep_view else source if view == 'time' else 'immediately',
                     'trigger_delay': 0, 'rolling_mode': False}
         if kind == 'spectrum':
             return {**settings, 'baseband': True, 'input1_baseband': 'in2', 'input2_baseband': 'in2'}
@@ -366,7 +419,7 @@ def make_server(address, session):
                 return self.reply(403, {'ok': False, 'error': 'Cross-origin request rejected'})
             try:
                 size = int(self.headers.get('Content-Length', 0))
-                if not 0 < size <= 16384:
+                if not 0 < size <= (524288 if self.path == '/api/excitation/run' else 16384):
                     raise ValueError('Invalid request size')
                 if not self.path.startswith('/api/'):
                     raise ValueError('Unknown endpoint')

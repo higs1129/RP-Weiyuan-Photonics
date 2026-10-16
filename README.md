@@ -1,6 +1,6 @@
 # RP*微源光子测控平台
 
-独立的 Windows 测控应用，连接 Red Pitaya 与微源激光器。当前应用版本 **0.3.0**，公共设备库固定为 **a221-workbench 0.2.24**，PyRPL 固定为 **0.9.8.0**。名称中的 `*` 用于界面，文件夹使用 `RP-Weiyuan-Photonics`。
+独立的 Windows 测控应用，连接 Red Pitaya 与微源激光器。当前应用版本 **0.3.5**，公共设备库固定为 **a221-workbench 0.2.30**，PyRPL 固定为 **0.9.8.0**。名称中的 `*` 用于界面，文件夹使用 `RP-Weiyuan-Photonics`。
 
 ## 使用
 
@@ -53,3 +53,5 @@ cd RP-Weiyuan-Photonics
 项目仓库：[higs1129/RP-Weiyuan-Photonics](https://github.com/higs1129/RP-Weiyuan-Photonics)。仓库与 Release 源码 ZIP 均包含源码、模板、文档及固定资源，排除个人配置和运行数据。
 
 遇到问题请在 [Issues](https://github.com/higs1129/RP-Weiyuan-Photonics/issues) 提供软件版本、错误截图、相关操作和脱敏后的诊断信息；请勿附上密码或 UART 凭据。
+
+时域观察新增可选 ASG1 激励与同步响应观察，见 [操作与限制](docs/excitation.md)。

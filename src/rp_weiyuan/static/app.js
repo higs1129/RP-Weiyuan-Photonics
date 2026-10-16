@@ -11,8 +11,17 @@ document.querySelector('#host').value=info.host;
 if(info.connected){document.querySelector('#connect').textContent='连接并启动';message.textContent='当前会话已连接 '+info.host;}
 const busy=new Set();
 const cache={};
+let liveRequests=Promise.resolve();
 function status(text,error=false){message.textContent=text;message.className=error?'error':'';}
 async function api(action,body={},options={}){
+ if(action.startsWith('live/')&&!options.queued){
+  const pending=liveRequests.catch(()=>{}).then(()=>api(action,body,{...options,queued:true}));
+  liveRequests=pending;return pending;
+ }
+ if(action.startsWith('excitation/')){
+  const r=await fetch('/api/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-Instrument-Console':'1'},body:JSON.stringify(body)});
+  const data=await r.json();if(!r.ok||!data.ok)throw new Error(data.error||'激励操作失败');return data;
+ }
  const lane=action==='stop'||['live/pause','live/release'].includes(action)?'stop':action.startsWith('laser/')?'laser':action.startsWith('live/')?'live':'rp';
  if(busy.has(lane))throw new Error('请等待当前操作完成');
  busy.add(lane);

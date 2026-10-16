@@ -56,6 +56,7 @@ export function mount(root,context){
    window.dispatchEvent(new Event('measurement-transition'));
    const result=await api(name,name==='lock'?{settings:cache.lockSettings}:cache.sweepSettings);
    Object.assign(info,{lock:result.lock});
+   if(name==='fine-sweep'&&!disposed)window.dispatchEvent(new Event('measurement-resume'));
    status(name==='lock'?'已开始捕获；锁定确认后持续守护 IN1。':'已停止守护并恢复扫频。');
   }catch(e){status(e.message,true);}finally{pending=false;if(!disposed)update();}
  }

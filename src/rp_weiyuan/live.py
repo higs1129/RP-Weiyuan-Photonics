@@ -7,6 +7,7 @@ import threading
 import time
 import uuid
 from a221_workbench.instruments.redpitaya.device import InstrumentBusy
+from a221_workbench.instruments.redpitaya.bridge_client import TriggerTimeout
 
 
 def preview(capture, buckets=450):
@@ -40,6 +41,7 @@ class LiveAcquisition:
         self.sequence = 0
         self.error = None
         self.fps = 0.0
+        self.waiting_for_trigger = False
         self.gate = lambda: {'ready': True, 'epoch': 0, 'state': 'idle'}
         self.validate_capture = lambda capture: capture
 
@@ -64,6 +66,7 @@ class LiveAcquisition:
             self.kind = kind
             self.latest = self.reduced = None
             self.sequence, self.error, self.fps = 0, None, 0.0
+            self.waiting_for_trigger = kind == 'scope' and settings.get('trigger_source') == 'asg1'
             self._stop = threading.Event()
             self._last_seen = time.monotonic()
             self._thread = threading.Thread(target=self._run, args=(deepcopy(settings), fps, timeout_s), daemon=True)
@@ -94,22 +97,32 @@ class LiveAcquisition:
                             # The reference scan temporarily changed scope routing.
                             instrument.configure(**settings)
                             configured_epoch = before['epoch']
+                        with self._lock:
+                            self.waiting_for_trigger = self.kind == 'scope' and settings.get('trigger_source') == 'asg1'
                         full = instrument.acquire(timeout_s=timeout_s).as_dict()
                         after = self.gate()
                 except InstrumentBusy:
                     self._stop.wait(.1)
                     continue
+                except TriggerTimeout:
+                    with self._lock:
+                        self.waiting_for_trigger = True
+                    self._stop.wait(.01)
+                    continue
                 if not after['ready'] or before['epoch'] != after['epoch']:
                     continue  # Includes the whole spectrum averaging interval.
                 full['lock_context'] = after
                 full = self.validate_capture(full)
-                reduced = preview(full)
+                # Triggered scope frames preserve all samples, including between
+                # packets. Free-running monitoring retains the bounded preview.
+                reduced = full if self.kind == 'scope' and settings.get('trigger_source') == 'asg1' else preview(full)
                 now = time.monotonic()
                 with self._lock:
                     if self._stop.is_set():
                         break  # A late frame must not change a paused picture.
                     self.latest, self.reduced = full, reduced
                     self.sequence += 1
+                    self.waiting_for_trigger = False
                     self.fps = 1 / (now - previous) if previous is not None else 1 / max(now - started, .001)
                 previous = now
                 self._stop.wait(max(0, 1 / target_fps - (time.monotonic() - started)))
@@ -129,6 +142,7 @@ class LiveAcquisition:
             return {'ok': True, 'run_id': self.run_id, 'sequence': self.sequence,
                     'running': self.busy and not self._stop.is_set(),
                     'stopping': self.busy and self._stop.is_set(), 'error': self.error,
+                    'waiting_for_trigger': self.waiting_for_trigger,
                     'acquisition_fps': self.fps, 'simulated': self.simulated,
                     'measurement_gate': self.gate(),
                     'capture': frame if full or self.sequence > after else None}

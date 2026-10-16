@@ -12,7 +12,7 @@ export function plot(root,capture,options={}){
  let last=x.findIndex(v=>v>xmax);if(last<0)last=x.length-1;
  first=Math.max(0,first-1);last=Math.min(x.length-1,last);
  let indices;
- if(last-first<2048)indices=Array.from({length:last-first+1},(_,i)=>first+i);
+ if((scope&&!capture.preview)||last-first<2048)indices=Array.from({length:last-first+1},(_,i)=>first+i);
  else{
   const keep=new Set([first,last]),step=Math.ceil((last-first+1)/450);
   for(let start=first;start<=last;start+=step)for(const y of series){

@@ -44,6 +44,20 @@ main{padding:12px 20px;max-width:none}#message{min-height:0;margin:0 0 8px;line-
 .laser-side .compact-laser .laser-toolbar [role=status]{flex:1;font-size:12px}.laser-side .compact-laser .metric small{line-height:1.5}
 .live-card .toolbar{gap:10px;margin-bottom:8px}.live-card .frame-toolbar{font-size:12px;gap:8px;row-gap:4px}.frame-lock{margin-bottom:4px}.frame-lock.warning{padding:6px 8px}
 .live-card #chart{height:clamp(240px,calc(100dvh - 340px),420px);min-width:0;user-select:none;cursor:crosshair;touch-action:pan-y}
+body[data-page=time] .live-card #chart{height:clamp(220px,calc(100dvh - 425px),380px)}
+.excitation{margin:0 0 10px}.excitation .fields{margin:10px 0}.excitation input{max-width:160px}.excitation small{max-width:240px}
+.time-options{font-size:12px;margin:5px 0}.time-options label{display:flex;flex-direction:row;align-items:center;gap:6px}.time-options input[type=checkbox]{width:auto;min-height:0}.time-options select{padding:5px;min-height:32px}
+#exObserveLabel,#exAutoLabel{display:flex;flex-direction:row;gap:8px;align-items:center;margin:8px 0;font-size:13px}#exObserveLabel[hidden],#exAutoLabel[hidden]{display:none}#exObserve,#exAuto{width:auto;min-height:0;flex-shrink:0}
+@media(min-width:1100px){
+ body[data-page=time] .live-card:has(.excitation[open]){display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:0 18px;align-items:start}
+ body[data-page=time] .live-card:has(.excitation[open])> :not(#excitationPanel){grid-column:1}
+ .live-card:has(.excitation[open]) #excitationPanel{grid-column:2;grid-row:1/13;border-left:1px solid #dbe3df;padding-left:16px}
+ .excitation[open] .fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+ .excitation[open] input,.excitation[open] select{width:100%;min-width:0;max-width:100%}
+ .excitation[open] #exFileLabel{grid-column:1/-1}.excitation[open] #exFileLabel[hidden]{display:none}
+ .excitation[open] .toolbar{margin:12px 0;gap:8px}.excitation[open] button{font-size:13px;padding:8px}
+ .excitation[open] .muted{font-size:12px}.excitation[open] #exState{font-size:12px;line-height:1.6}
+}
 body[data-page=initialize] .live-card #chart{height:clamp(220px,calc(100dvh - 430px),345px)}
 .live-card .chart{height:100%;width:100%;min-height:0}.live-card .empty{display:flex;align-items:center;justify-content:center;padding:20px}
 .axis-hint{font-size:12px;margin:0}.plot-options{display:flex;flex-wrap:wrap;gap:4px 22px;margin-top:6px;align-items:start}
