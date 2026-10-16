@@ -26,7 +26,7 @@ RP 网络发现、百兆恢复、底层寄存器/串口协议和通用分析属�
 
 仓库跟踪源码、配置模板、入口、文档及固定离线资源。个人 `config.json`、环境、数据、缓存、日志及 UART 凭据不提交。根目录 `.gitattributes` 禁止转换 `dependencies/` 内固定资源的换行，防止破坏签名文件和校验值。
 
-本次离线依赖资源随仓库一起维护，因此完整 Git 克隆和同版本的 GitHub 源码 ZIP 都有安装所需资源。正式发布前需确认新账号和仓库位置；目前未创建远程仓库。后续 Release 可以附完整目录压缩包，但不应加入个人配置，也不需要把运行环境或 `dist/` 构建副本提交到源码仓库。
+离线依赖资源随 [higs1129/RP-Weiyuan-Photonics](https://github.com/higs1129/RP-Weiyuan-Photonics) 仓库一起维护，因此完整 Git 克隆和同版本的 GitHub 源码 ZIP 都有安装所需资源。默认分支为 main；首个独立版本为 v0.3.0。发布 Release 时，GitHub 自动生成的 Source code (zip) 即包含受 Git 管理的全部离线资源，不必每次另造安装包；不加入个人配置、运行环境或 dist 构建副本。
 
 ## 本次迁移
 
