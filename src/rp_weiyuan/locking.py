@@ -136,6 +136,7 @@ class LockDetector:
 class LockController:
     def __init__(self, rp, live, defaults=None):
         self.rp, self.live = rp, live
+        self.observation = None
         self.defaults = asdict(LockSettings.parse(defaults or {}))
         self._mutex = threading.RLock()
         self._commands = threading.Lock()
@@ -221,6 +222,8 @@ class LockController:
         changed_output = False
         try:
             self.live.stop_and_wait()
+            if self.observation:
+                self.observation.suspend()
             if self._stop.is_set():
                 return
             result = self._reference_capture(settings)
@@ -285,15 +288,21 @@ class LockController:
                     self._update(telemetry=row, error=None)
                     state = self.status()['state']
                     if decision['stable']:
+                        if state != 'locked' and self.observation:
+                            self.observation.resume()
                         self._update(state='locked', message='已锁定 · IN1 守护中')
                     elif state == 'locked' and decision['lost']:
                         self._update(state='lost', reference=None,
                                      message=decision['reason'] + '，等待重新扫描获取锁点')
+                        if self.observation:
+                            self.observation.suspend()
                         self.rp.feedback.off()
                         acquiring, retry_at = True, time.monotonic() + settings.retry_interval_s
                     elif state != 'locked' and time.monotonic() >= capture_deadline:
                         self._update(state='lost', reference=None,
                                      message='捕获尚未确认，等待重新扫描获取锁点')
+                        if self.observation:
+                            self.observation.suspend()
                         self.rp.feedback.off()
                         acquiring, retry_at = True, time.monotonic() + settings.retry_interval_s
                 self._stop.wait(settings.poll_interval_s)
@@ -329,6 +338,9 @@ class LockController:
         with self._commands:
             self.stop()
             self.live.stop_and_wait()
+            if self.observation:
+                self.observation.close()
+                self.observation.resume()
             try:
                 restore_fine_sweep(self.rp, **values)
             except Exception as exc:

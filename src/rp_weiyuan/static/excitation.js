@@ -15,6 +15,10 @@ export function mountExcitation(root,{api,cache,status,info},view){
  <div class="toolbar"><button id="exStart" class="primary">发出 burst</button><button id="exStop" disabled>停止激励</button><span id="exState" role="status">未开启输出</span></div>
  <p class="muted">激励与观察独立控制：需要观察响应时，选择下方 ASG1 内部同步触发并运行采集。单次 burst 每点击一次发一包；周期 burst 持续自动发包，点停止结束。同步观察按触发刷新；自由采集可看多包变化，均不保证无间断记录每一包。幅度为 PyRPL 峰值（Vpp = 2 × 幅度），未补偿外部负载。离开或隐藏页面停止激励；丢失心跳后约 10 秒停止连续输出。</p></details>`;
  const $=id=>root.querySelector('#'+id);
+ if(view.native){
+  $('exObserveLabel').lastChild.textContent='发送时在 PyRPL Scope 单次采集（先等待触发）';
+  root.querySelector('.excitation>p:last-child').textContent='网页只设置激励，不采集波形。Scope：CH1=ASG1，CH2=IN2；用双游标测量时间差。切到 PyRPL 窗口继续输出；关闭原生观察窗口、离开本功能页或关闭平台会停止本次激励。周期 burst 由 FPGA 定时，采集不保证每包无遗漏。';
+ }
  let disposed=false,token=null,busy=false,heartbeat=null,samples=null;
  const fields=['exMode','exWave','exFreq','exAmp','exOffset','exCycles','exPeriod'];
  for(const id of fields)if(cache.excitation?.[id]!==undefined)$(id).value=cache.excitation[id];
@@ -75,12 +79,13 @@ export function mountExcitation(root,{api,cache,status,info},view){
     if(!capturePlan)throw new Error('激励参数已变化，请重试');
     config.auto_duration=true;config.duration=capturePlan.duration;
    }
-   if(config.observe){await view.halt();view.setDuration(config.duration);}
+   if(view.native){const singleCapture=config.observe;config.observe=false;await view.prepareExcitation(config,capturePlan,singleCapture);}
+   else if(config.observe){await view.halt();view.setDuration(config.duration);}
    else if(capturePlan)await view.prepareBurst(capturePlan,config.mode==='burst');
-   if(disposed||token!==id||document.hidden)return;
+   if(disposed||token!==id||(!view.native&&document.hidden))return;
    // Heartbeat also keeps a deliberately cancelled/expired run from restarting.
-   const result=await api('excitation/run',{run_id:id,settings:config},{quiet:true});
-   if(disposed||token!==id||document.hidden){await api('excitation/stop',{run_id:id},{quiet:true});return;}
+   const result=await api('excitation/run',{run_id:id,settings:config,...(view.native?{native_observation:true}:{})},{quiet:true});
+   if(disposed||token!==id||(!view.native&&document.hidden)){await api('excitation/stop',{run_id:id},{quiet:true});return;}
    if(result.capture){token=null;view.show(result);text('burst 完成 · 输出已关闭；t=0 为内部事件，未校准 OUT1 起点');}
    else{
     text(`${config.mode==='burst'?'已发出 burst':config.mode==='periodic_burst'?'周期 burst 输出中':'连续输出中'} · 实际频率 ${Number(result.actual.frequency).toPrecision(6)} Hz${config.mode==='periodic_burst'?` · 配置重复周期 ${Number(result.actual.nominal_burst_period).toPrecision(6)} s`:''}`);
@@ -90,7 +95,7 @@ export function mountExcitation(root,{api,cache,status,info},view){
   finally{busy=false;if(!disposed)update();}
  };
  const controller=new AbortController();
- document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();},{signal:controller.signal});
+ document.addEventListener('visibilitychange',()=>{if(document.hidden&&!view.native)stop();},{signal:controller.signal});
  window.addEventListener('pagehide',()=>{if(token)fetch('/api/excitation/stop',{method:'POST',headers:{'Content-Type':'application/json','X-Instrument-Console':'1'},body:JSON.stringify({run_id:token}),keepalive:true}).catch(()=>{});},{signal:controller.signal});
  update();
  return ()=>{disposed=true;controller.abort();clearInterval(heartbeat);const pending=stop();cache.acquisitionHandoff=Promise.all([cache.acquisitionHandoff,pending]);};

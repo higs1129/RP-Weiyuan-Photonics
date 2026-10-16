@@ -1,12 +1,12 @@
 {
-  "application": "0.3.5",
+  "application": "0.3.6",
   "python": "3.10.11 (Python Software Foundation signed installer)",
   "pyrpl_commit": "81beee5cf5e3651e66b5dec5103a355fca07fa30",
   "pyrpl_source_sha256": "aeeff6de873491e22c77beb3d3521a8063545baa30cbe0ff89fa696210d2bdb1",
   "drivers": "FTDI 2.12.36.20; original signed ftdibus and ftdiport packages exported from Windows driver store, no device settings",
   "driver_reference": "https://ftdichip.com/drivers/vcp-drivers/",
   "packages": {
-    "a221-workbench": "0.2.30",
+    "a221-workbench": "0.2.31",
     "bcrypt": "5.0.0",
     "cffi": "2.0.0",
     "colorama": "0.4.6",
@@ -45,10 +45,10 @@
     "typing_extensions": "4.15.0"
   },
   "core_source": {
-    "version": "0.2.30",
-    "base_commit": "702659eb14e7eee1bd90aa615d3ca9134fe94557",
-    "changes": "docs/asg1-excitation-change.md; source snapshot matches the committed library",
-    "sha256": "fec11885bbbe75e376dfb7c9683f434fc245c6eed6a09a0a151a1e601c41abe2",
-    "commit": "475f811bf96e01aff540a5f1507e3ea2d77b1e46"
+    "version": "0.2.31",
+    "base_commit": "475f811bf96e01aff540a5f1507e3ea2d77b1e46",
+    "changes": "Native observation and lock acquisition handoff; source snapshot matches the committed library; see docs/asg1-excitation-change.md",
+    "sha256": "307335bb4a001df74f6aa39df5fcf6a5f7596275f9fc3dd028ad036b4bfa27c7",
+    "commit": "7f063086fec823b0866e5957ecf0a755badf6dad"
   }
 }

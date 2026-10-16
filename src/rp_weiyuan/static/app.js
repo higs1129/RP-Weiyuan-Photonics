@@ -1,5 +1,5 @@
 import {mount as connection} from './connection.js';
-import {mount as acquisition} from './acquisition.js';
+import {mount as nativeObservation} from './native_observation.js';
 import {mount as initialization} from './initialization.js';
 import {monitorConnections} from './connection_status.js';
 
@@ -22,7 +22,7 @@ async function api(action,body={},options={}){
   const r=await fetch('/api/'+action,{method:'POST',headers:{'Content-Type':'application/json','X-Instrument-Console':'1'},body:JSON.stringify(body)});
   const data=await r.json();if(!r.ok||!data.ok)throw new Error(data.error||'激励操作失败');return data;
  }
- const lane=action==='stop'||['live/pause','live/release'].includes(action)?'stop':action.startsWith('laser/')?'laser':action.startsWith('live/')?'live':'rp';
+ const lane=action==='stop'||['live/pause','live/release'].includes(action)?'stop':action.startsWith('laser/')?'laser':action.startsWith('observation/')?'observation':action.startsWith('live/')?'live':'rp';
  if(busy.has(lane))throw new Error('请等待当前操作完成');
  busy.add(lane);
  if(!options.quiet)status('正在执行…');
@@ -131,7 +131,7 @@ function render(){
   view.querySelector('#connectionToolsSlot').append(connectionTools);connectionTools.hidden=false;
  }
  else if(key==='initialize')cleanup=initialization(view,context);
- else cleanup=acquisition(view,context,key);
+ else cleanup=nativeObservation(view,context,key);
  window.scrollTo({top:0,left:0,behavior:'instant'});
 }
 document.addEventListener('click',event=>{

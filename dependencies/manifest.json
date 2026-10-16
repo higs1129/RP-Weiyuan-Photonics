@@ -1,6 +1,6 @@
 {
   "packages": {
-    "a221-workbench": "0.2.30",
+    "a221-workbench": "0.2.31",
     "bcrypt": "5.0.0",
     "cffi": "2.0.0",
     "colorama": "0.4.6",
@@ -551,7 +551,7 @@
     },
     {
       "path": "requirements.lock",
-      "sha256": "31b72af260837bcedf218d5bd1b48a1b8080e0233056951a74710acd22b5111d",
+      "sha256": "2380c63ccb9eb8e7df4330a5b06ffe657d6738fea9bcb8beeeedbd6d04120ec1",
       "url": null
     },
     {
@@ -565,8 +565,8 @@
       "url": "https://github.com/pyrpl-fpga/pyrpl/archive/81beee5cf5e3651e66b5dec5103a355fca07fa30.zip"
     },
     {
-      "path": "wheels/a221_workbench-0.2.30-py3-none-any.whl",
-      "sha256": "358cf9f8e54817be00f84dbbd9e527793d7087d17cb57da49da80d9d30dd58fc",
+      "path": "wheels/a221_workbench-0.2.31-py3-none-any.whl",
+      "sha256": "2fee0afd0e4103ae71018091c910f85b476d0a8b33310dbb4434fb5fd445c45a",
       "url": null
     },
     {
@@ -750,8 +750,8 @@
       "url": "https://files.pythonhosted.org/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl"
     },
     {
-      "path": "upstream/a221-workbench-0.2.30-source.zip",
-      "sha256": "fec11885bbbe75e376dfb7c9683f434fc245c6eed6a09a0a151a1e601c41abe2",
+      "path": "upstream/a221-workbench-0.2.31-source.zip",
+      "sha256": "307335bb4a001df74f6aa39df5fcf6a5f7596275f9fc3dd028ad036b4bfa27c7",
       "url": null
     }
   ]

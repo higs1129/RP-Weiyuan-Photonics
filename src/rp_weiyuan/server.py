@@ -5,6 +5,7 @@ from . import __version__
 import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import logging
 import math
 import mimetypes
 import os
@@ -25,6 +26,7 @@ from rp_weiyuan.laser_profile import LIMITS, INITIAL
 from rp_weiyuan.laser_startup import start_debug
 from rp_weiyuan.laser_settings import set_confirmed
 from rp_weiyuan.live import LiveAcquisition
+from rp_weiyuan.native_observation import Observation
 from a221_workbench.tasks.redpitaya.restart_bridge import restart_bridge
 from .configuration import configured_host, spectrum_correction, verify_correction, input_ranges
 STATIC = Path(__file__).parent / 'static'
@@ -52,7 +54,9 @@ class Session:
         self.runtime = BridgeRuntime(bridge, state_dir=configuration_dir('weiyuan_rp') / '.runtime', python=self.config.get('pyrpl_python'), auto_select=auto_bridge, upgrade_idle=True)
         self.live = LiveAcquisition(self.rp, simulated=False)
         self.live.validate_capture = self.validate_capture
+        self.observation = Observation(self.rp)
         self.lock = LockController(self.rp, self.live, self.config.get('lock_defaults'))
+        self.lock.observation = self.observation
         self.live.gate = self.lock.gate
         self._acquisition_control = threading.RLock()
 
@@ -172,6 +176,24 @@ class Session:
         return result
 
     def dispatch(self, action, body):
+        if action.startswith('observation/'):
+            command = action.split('/')[1]
+            with self._acquisition_control:
+                if command == 'close':
+                    return self.observation.close()
+                if command == 'state':
+                    return self.observation.request('state')
+                if not self.lock.gate()['ready']:
+                    raise RuntimeError('正在锁模/重锁；完成后将恢复原生观察')
+                if command == 'open':
+                    self.live.stop_and_wait()
+                    kind = body['kind']
+                    if kind == 'spectrum':
+                        self.check_rf_correction(apply=True)
+                    return self.observation.request('open', kind=kind, settings=body.get('settings', {}), run=body.get('run', 'continuous'))
+                if command == 'run':
+                    return self.observation.request('run', run=body['run'])
+                raise ValueError('Unknown native observation action')
         if action == 'excitation/plan':
             from a221_workbench.instruments.redpitaya.excitation import burst_capture_plan
             return {'ok': True, **burst_capture_plan(body['frequency'], body['cycles'])}
@@ -198,7 +220,12 @@ class Session:
                     raise RuntimeError('正在捕获或重锁，请等待锁定稳定后发送激励')
                 if settings['observe'] and settings['mode'] == 'burst':
                     self.live.stop_and_wait()
-                result = self.rp.excitation.run(settings, run_id=body['run_id'])
+                if body.get('native_observation'):
+                    if settings['observe']:
+                        raise ValueError('原生单次观察请先在 Scope 中等待触发')
+                    result = self.rp.excitation.run(settings, run_id=body['run_id'], native_observation=True)
+                else:
+                    result = self.rp.excitation.run(settings, run_id=body['run_id'])
                 if 'capture' in result:
                     after = self.lock.gate()
                     if not after['ready'] or before['epoch'] != after['epoch']:
@@ -223,6 +250,7 @@ class Session:
             if body['kind'] == 'spectrum':
                 self.check_rf_correction()
             with self._acquisition_control:
+                self.observation.close()
                 settings = self.observation_settings(body['kind'], body.get('settings', {}), view=body.get('view', 'time'))
                 if body['kind'] == 'scope' and settings.get('trigger_source') == 'asg1' and not (self.rp.bridge_status or {}).get('scope_trigger_wait_revision'):
                     raise RuntimeError('RP 后台尚未更新触发等待修复；请暂停采集、停止激励和守护，再在仪器连接中重启 RP 后台')
@@ -462,6 +490,12 @@ def main():
                 session.lock.stop()
         finally:
             server.server_close()
+            if session.rp.connected:
+                try:
+                    session.observation.close()
+                    session.observation.resume()
+                except Exception:
+                    logging.exception('Closing native observation failed')
             session.laser.close()
             session.rp.close()
 if __name__ == '__main__':
