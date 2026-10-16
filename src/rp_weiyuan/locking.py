@@ -13,6 +13,7 @@ import time
 
 from a221_workbench.instruments.redpitaya.feedback import validate_handoff
 from a221_workbench.instruments.redpitaya.device import InstrumentBusy
+from .scan import mode_scope_settings
 
 
 @dataclass(frozen=True)
@@ -208,9 +209,8 @@ class LockController:
                         self.rp.asg.configure(output_direct='out2')
                     if self._stop.is_set():
                         return None
-                    capture = self.rp.scope.acquire(settings={'input1': 'in1', 'input2': 'out2',
-                        'duration': settings.duration_s, 'trigger_source': 'asg0', 'trigger_delay': 0,
-                        'rolling_mode': False}, timeout_s=5).as_dict()
+                    capture = self.rp.scope.acquire(settings=mode_scope_settings(
+                        settings.duration_s, reference=True), timeout_s=5).as_dict()
                     return capture, sweep
             except InstrumentBusy:
                 if time.monotonic() >= deadline:

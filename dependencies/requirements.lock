@@ -6,7 +6,7 @@ PyVISA==1.16.2
 PyVISA-py==0.8.1
 PyYAML==6.0.3
 QtPy==2.4.3
-a221-workbench==0.2.31
+a221-workbench==0.2.32
 bcrypt==5.0.0
 cffi==2.0.0
 colorama==0.4.6

@@ -398,6 +398,10 @@ class Session:
             if source not in ('immediately', 'asg1') or not isinstance(show_source, bool):
                 raise ValueError('不支持的时域触发或显示选项')
             sweep_view = view == 'initialize' and self.lock.status()['state'] in ('idle', 'stopped', 'sweeping')
+            if view == 'initialize':
+                from .scan import mode_scope_settings
+                return {**settings, **mode_scope_settings(
+                    settings.get('duration', self.lock.defaults['duration_s']), sweeping=sweep_view)}
             return {**settings, 'input1': 'asg1' if view == 'time' and show_source else 'in1', 'input2': 'asg0' if sweep_view else 'in2',
                     'trigger_source': 'asg0' if sweep_view else source if view == 'time' else 'immediately',
                     'trigger_delay': 0, 'rolling_mode': False}

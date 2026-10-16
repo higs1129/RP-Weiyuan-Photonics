@@ -6,6 +6,19 @@ import uuid
 import math
 
 
+def mode_scope_settings(duration_s, *, sweeping=True, reference=False):
+    """Explicit lock/initialization profile, independent of native observation.
+
+    trace_average counts complete acquisitions; average only affects hardware
+    decimation. Never inherit a native viewer's 50-frame averaging request.
+    Stop auto-run first, before properties that may invoke PyRPL setup().
+    """
+    return dict(run_continuous=False, trace_average=1, average=True,
+                input1='in1', input2='out2' if reference else 'asg0' if sweeping else 'in2',
+                duration=duration_s, trigger_source='asg0' if sweeping or reference else 'immediately',
+                trigger_delay=0, rolling_mode=False)
+
+
 def restore_fine_sweep(rp, *, frequency_hz, amplitude_v, duration_s):
     """Show IN1/ASG0 with ASG0 scope trigger; keep the OUT2 actuator route."""
     if not all(math.isfinite(v) and v > 0 for v in (frequency_hz, amplitude_v, duration_s)):
@@ -16,8 +29,7 @@ def restore_fine_sweep(rp, *, frequency_hz, amplitude_v, duration_s):
         rp.asg.configure(output_direct='off')
         rp.asg.configure(waveform='ramp', frequency=frequency_hz, amplitude=amplitude_v, offset=0,
                          trigger_source='immediately')
-        rp.scope.configure(input1='in1', input2='asg0', trigger_source='asg0',
-                           trigger_delay=0, duration=duration_s, rolling_mode=False)
+        rp.scope.configure(**mode_scope_settings(duration_s))
         rp.asg.configure(output_direct='out2')
     return {'ok': True, 'route': 'in1/asg0 -> scope; asg0 -> out2; pid0 off'}
 
