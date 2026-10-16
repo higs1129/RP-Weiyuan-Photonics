@@ -8,17 +8,21 @@ RP 网络发现、百兆恢复、底层寄存器/串口协议和通用分析属�
 
 ## 固定公共依赖
 
-当前使用 `a221-workbench==0.2.24`，wheel SHA256 为：
+当前使用 `a221-workbench==0.2.32`，wheel SHA256 为：
 
 ```
-681c63a14998f80f42f957590b1d11b91f058e3af10dc0397be5701d4f756c15
+1c7d2414b40795f82908fe59f22879199bc297d4fc0061a2b8a711a5c9797437
 ```
 
-它来自已验证的 0.2.24 离线发布，配套原始源码归档位于 `dependencies/upstream/a221-workbench-0.2.24-source.zip`。该历史 wheel 和源码归档仍包含当时的旧界面；它们仅作不可变依赖和来源记录，本产品启动只导入自己的 `rp_weiyuan` 界面。
+配套原始源码归档位于 `dependencies/upstream/a221-workbench-0.2.32-source.zip`；来源提交记录在 `dependencies/PROVENANCE.json`。本产品只使用自己的 `rp_weiyuan` 界面和已安装的公共驱动。
 
 升级公共库时，同时调整 `pyproject.toml` 的精确依赖、`dependencies/requirements.lock`、对应 wheel、`dependencies/manifest.json` 中的包版本与文件 SHA256，以及来源记录。删除旧 wheel，避免离线目录中混入多个版本。先在独立验证目录确认安装、关键功能与数值口径，再提交。
 
-普通应用更新只生成新的本机运行快照，依赖清单不变则复用 Python 环境。依赖升级或 `repair.cmd` 才创建新环境。验证失败不会更新 `current.json`。`rollback.cmd` 恢复前一个应用快照及匹配环境；配置和已写入硬件的设置不回退。
+0.3.8 起，运行环境身份仅取包版本和 wheel 校验值，源码归档、许可、驱动资源和下载地址变化不再触发重建。普通应用更新复用环境；仅 a221-workbench 更新时，通过 pip --no-index --no-deps 替换该包。其他基础包变化、首次安装和 repair 才创建新环境。安装资源校验仍覆盖整个清单。
+
+本机 wheel-cache 只保留当前公共驱动的原始 wheel，使用 SHA256 验证，供下一次更新失败时恢复安装。更新期间临时保留新旧包，通过 pip 安装原始 wheel，不修改驱动源码。旧安装若缺少恢复用的旧 wheel，则做一次新环境迁移。更新前写 pending-update.json；替换驱动和离线验证成功后才切换版本并移除事务文件。失败立即恢复，进程意外中断则下次运行先恢复；验证成功后不保留前一版本，不提供 rollback 入口。
+
+成功验证后，仅保留 current 引用的环境、快照和 wheel 缓存，并移除旧安装的 previous.json。只清理安装目录下匹配命名规则的直接子目录，跳过符号链接、junction 和仍被占用的文件。配置、实验数据、日志、凭据不属于清理范围；不操作真实设备。新版功能问题通过 GitHub Issues 跟踪并发布修复。
 
 运行快照在应用数据目录，是安装副本，不是另一份需要手工维护的源码。
 

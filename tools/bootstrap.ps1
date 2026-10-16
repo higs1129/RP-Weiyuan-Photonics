@@ -1,4 +1,4 @@
-﻿param([ValidateSet('launch','setup','diagnose','repair','rollback','driver')][string]$Mode = 'launch')
+﻿param([ValidateSet('launch','setup','diagnose','repair','driver')][string]$Mode = 'launch')
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 # A terminal/IDE may prepend PowerShell 7 modules to a Windows PowerShell 5.1 child.
@@ -29,6 +29,8 @@ try {
     $manifest = Get-Content -LiteralPath (Join-Path $bundleRoot 'manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     $config = Get-Content -LiteralPath (Join-Path $projectRoot 'config.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     foreach ($asset in $manifest.files) {
+        # Diagnostics use the installed snapshot without downloading resources.
+        if ($Mode -eq 'diagnose' -or (Test-Path -LiteralPath (Join-Path $appRoot 'pending-update.json'))) { break }
         $file = Join-Path $bundleRoot $asset.path
         if (!(Test-Path -LiteralPath $file) -and $asset.url -and $config.installation.allow_downloads -ne $false) {
             Write-Host "Downloading missing asset: $($asset.path)"
@@ -82,7 +84,7 @@ try {
         if (Compatible-Python $candidate) { $python = $candidate; break }
     }
     if (!$python) {
-        if ($Mode -eq 'diagnose' -or $Mode -eq 'rollback') { throw 'No compatible Python 3.10 x64 found. Run setup.cmd first.' }
+        if ($Mode -eq 'diagnose') { throw 'No compatible Python 3.10 x64 found. Run setup.cmd first.' }
         New-Item -ItemType Directory -Force $appRoot | Out-Null
         $installer = Join-Path $bundleRoot 'runtime\python-3.10.11-amd64.exe'
         $signature = Get-AuthenticodeSignature -LiteralPath $installer
@@ -93,6 +95,13 @@ try {
         if ($process.ExitCode -notin @(0,3010)) { throw "Python installation failed: $($process.ExitCode)" }
         $python = Join-Path $targetDir 'python.exe'
         if (!(Compatible-Python $python)) { throw 'Installed Python failed its startup check.' }
+    }
+    # Run the manager from the base interpreter, so it does not hold open an old
+    # venv's python.exe while cleaning a successfully replaced environment.
+    $baseCandidate = & $python -I -c "import sys; print(getattr(sys, '_base_executable', sys.executable))" 2>$null
+    if ($LASTEXITCODE -eq 0 -and $baseCandidate) {
+        $baseCandidate = [string]($baseCandidate | Select-Object -Last 1)
+        if (Compatible-Python $baseCandidate) { $python = $baseCandidate }
     }
     Write-Host "Python: $python"
     & $python -I -X utf8 (Join-Path $PSScriptRoot 'manage.py') --project $projectRoot --home $appRoot --mode $Mode

@@ -1,5 +1,5 @@
 {
-  "application": "0.3.7",
+  "application": "0.3.8",
   "python": "3.10.11 (Python Software Foundation signed installer)",
   "pyrpl_commit": "81beee5cf5e3651e66b5dec5103a355fca07fa30",
   "pyrpl_source_sha256": "aeeff6de873491e22c77beb3d3521a8063545baa30cbe0ff89fa696210d2bdb1",

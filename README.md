@@ -1,6 +1,6 @@
 # RP*微源光子测控平台
 
-独立的 Windows 测控应用，连接 Red Pitaya 与微源激光器。当前应用版本 **0.3.7**，公共设备库固定为 **a221-workbench 0.2.32**，PyRPL 固定为 **0.9.8.0**。名称中的 `*` 用于界面，文件夹使用 `RP-Weiyuan-Photonics`。
+独立的 Windows 测控应用，连接 Red Pitaya 与微源激光器。当前应用版本 **0.3.8**，公共设备库固定为 **a221-workbench 0.2.32**，PyRPL 固定为 **0.9.8.0**。名称中的 `*` 用于界面，文件夹使用 `RP-Weiyuan-Photonics`。
 
 时域和频域观察使用同一后台的 PyRPL 原生窗口；时域支持 ASG1 / IN2 双游标测时。详见 [原生观察说明](docs/native-observation.md)。
 
@@ -29,18 +29,21 @@ cd RP-Weiyuan-Photonics
 
 已有克隆目录时，在关闭平台后执行 `git pull --ff-only`，再运行 `update.cmd`。使用 ZIP 的用户下载新版本、完整解压，并复制自己原来的 `config.json` 后运行 `setup.cmd`。
 
-固定公共依赖没有变化时复用环境，不必重新打包安装包。个人 `config.json` 不被 Git 管理，更新不会覆盖它。若公共驱动需要改动，应在原工作台修复并发布新版库，然后在这里明确升级依赖；修改原工作台源码不会自动改变本程序。
+普通更新复用 Python/PyRPL 环境。只升级公共驱动时，仅安装新的驱动 wheel；Python 环境中的其他包保持原版本。只有基础依赖（如 PyRPL、Qt、NumPy）变化、首次安装或运行 `repair.cmd` 时才重建环境。旧安装若没有用于失败恢复的驱动 wheel，首次遇到驱动升级时可能额外建一次迁移环境；成功后清理旧环境。从 0.3.7 更新到本版不需要重建。
+
+`releases` 是从本地源码复制的运行快照，不是重新下载 GitHub Release。更新验证成功后只保留当前版本需要的快照、环境和驱动缓存；占用中的旧文件留到下次清理。不保留前一版本，也不提供手动回退入口。安装期间临时保留失败恢复所需文件：更新失败自动恢复原安装，意外中断时下次运行启动器先恢复再继续；验证成功即清理。
+
+个人 `config.json` 不被 Git 管理，更新不会覆盖它。若公共驱动需要改动，应在原工作台修复并发布新版库，然后在这里明确升级依赖；修改原工作台源码不会自动改变本程序。
 
 | 入口 | 功能 |
 |---|---|
 | `diagnose.cmd` | 检查依赖、源码、Qt 和串口枚举，不联系仪器 |
 | `repair.cmd` | 重建独立环境，验证成功才切换 |
-| `rollback.cmd` | 恢复前一个验证成功的源码快照及对应环境，保留配置 |
 | `install-con-driver.cmd` | 显式安装随附 CON 驱动，Windows 可能提示 UAC |
 | `network-diagnose.cmd` | 用户主动运行的网络与 CON 只读诊断 |
 | `pair-uart.cmd` | 用户主动运行的既有托管 UART 服务凭据配对 |
 
-回退后 `launch.cmd` 保持回退版本；`update.cmd` 再次应用当前目录源码。回退软件不撤销设备上的设置。
+新版使用中遇到问题，请在 [GitHub Issues](https://github.com/higs1129/RP-Weiyuan-Photonics/issues) 提交应用版本、复现步骤和相关日志，修复后通过正常更新流程安装。
 
 ## 目录与隔离
 

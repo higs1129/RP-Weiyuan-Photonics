@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rp-weiyuan-photonics"
-version = "0.3.7"
+version = "0.3.8"
 description = "RP*微源光子测控平台"
 requires-python = ">=3.10,<3.11"
 dependencies = ["a221-workbench==0.2.32"]

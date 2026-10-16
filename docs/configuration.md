@@ -1,6 +1,6 @@
 # 配置与设备说明
 
-安装、更新和回退以项目根目录 README.md 为准。配置保存在根目录 config.json，不提交 Git。
+安装和更新以项目根目录 README.md 为准。配置保存在根目录 config.json，不提交 Git。
 
 ## 配置 JSON
 
