@@ -15,7 +15,6 @@ import threading
 from urllib.parse import urlparse
 import webbrowser
 from a221_workbench.instruments.redpitaya import RedPitaya
-from a221_workbench.instruments.redpitaya.device import BridgeConnectionLost
 from a221_workbench.instruments.weiyuan import WeiyuanLaser, LaserWriteNotSent
 from a221_workbench.instruments.redpitaya.runtime import BridgeRuntime
 from a221_workbench.instruments.redpitaya.network import resolve_host
@@ -84,23 +83,30 @@ class Session:
         if (configuration_dir('weiyuan_rp') / '.runtime/vendor-serial-active.json').exists():
             raise RuntimeError('激光器串口已交给厂家上位机测试；请先停止虚拟串口桥接')
         service_url = self.config.get('uart_url')
+        token = self.uart_setup.token()
+        key = (self.rp.host, service_url, token, self.laser.transport)
+        if not ensure_service and getattr(self, '_laser_transport_cache', None) == key:
+            return
         if not service_url:
             if ensure_service:
                 self.connection_setup['stage'] = '正在检查并准备微源串口服务'
                 self.connection_setup['uart'] = self.uart_setup.run('ensure', self.rp.host)
             service_url = 'http://' + resolve_host(self.rp.host)[1] + ':8092'
         self.laser.transport = self.rp.uart(service_url=service_url, token=self.uart_setup.token())
+        self._laser_transport_cache = (self.rp.host, self.config.get('uart_url'),
+                                       self.uart_setup.token(), self.laser.transport)
 
     def connect_laser(self, *, activate=False):
         with self._laser_guard:
             try:
-                self.prepare_laser_transport(ensure_service=True)
+                self.prepare_laser_transport(ensure_service=activate or not self.laser_connected)
                 self.connection_setup['stage'] = '正在读取激光器状态'
                 status = self.laser.read_status()
                 if activate:
                     self.connection_setup['stage'] = '通信已确认，正在执行激光器启动'
                     status = start_debug(self.laser, status)
             except Exception as exc:
+                self._laser_transport_cache = None
                 self.laser_connected = False
                 self.laser_error = str(exc)
                 self.connection_monitor.record('laser', False, str(exc))
@@ -127,30 +133,26 @@ class Session:
             try:
                 self.prepare_laser_transport()
                 for (field, value) in values.items():
-                    confirmed.update(set_confirmed(self.laser, field, value))
+                    result = set_confirmed(self.laser, field, value)
+                    if confirmed and result['mode'] != confirmed['mode']:
+                        raise RuntimeError('连续设置期间控制模式变化，请读取状态；未重发写入')
+                    confirmed.update(result)
                     applied.append(field)
             except Exception as exc:
+                self._laser_transport_cache = None
                 self.laser_connected = False
                 outcome = '当前项未发送。' if isinstance(exc, LaserWriteNotSent) else '失败项可能已生效，未重试。'
                 self.laser_error = f'设置未全部确认；已确认 {applied}；{outcome}{exc}'
                 raise RuntimeError(self.laser_error) from exc
-            (status, warning) = (None, None)
-            try:
-                status = self.laser.read_status()
-                if any((not math.isclose(status[key], value, rel_tol=0, abs_tol=0.02) for (key, value) in confirmed.items())):
-                    warning = '设定曾确认，但随后读回的模式或工作点已变化，请检查设备状态'
-                elif not status['tec_enabled'] and 'temperature' in values:
-                    warning = '温度设定已确认，但 TEC 已关闭，实际温度不会跟随'
-                elif not status['ld_enabled'] and 'current' in values:
-                    warning = '电流设定已确认，但 LD 已关闭，实际电流不会跟随'
-                (self.laser_connected, self.laser_error) = (True, None)
-            except Exception as exc:
-                warning = '设定已确认；完整状态刷新失败，实际值仍是旧读数：' + str(exc)
-                (self.laser_connected, self.laser_error) = (False, str(exc))
-            return {'ok': True, 'status': status, 'confirmed': confirmed, 'warning': warning, 'applied': applied, 'simulated': False}
+            # set_confirmed has already verified the write echo, setpoint and mode.
+            # A full status adds ten serial round trips without making the write
+            # more current. Leave measured values explicitly stale until requested.
+            (self.laser_connected, self.laser_error) = (True, None)
+            return {'ok': True, 'status': None, 'confirmed': confirmed, 'warning': None,
+                    'applied': applied, 'simulated': False}
 
     def _restart_backend(self, host):
-        """Shared by explicit restart and one-shot recovery while connecting.
+        """Shared by explicit restart and every connect-and-start action.
 
         The caller holds _connection_guard and has prepared the RP network.
         """
@@ -288,44 +290,28 @@ class Session:
         if action == 'connect':
             with self._connection_guard:
                 host = str(body.get('host', self.rp.host)).strip()
-                if not host or any((c in host for c in '/?#@ ')):
+                if not host or any((c in host for c in '/\\?#@ \r\n')):
                     raise ValueError('请填写 RP 主机名或 IP')
                 if host != self.rp.host:
                     if self.rp.connected:
                         raise ValueError('当前会话已连接另一台设备；请新开控制台会话，避免影响正在运行的输出')
                     self.rp.host = host
-                    if False:
-                        self.rp.client.host = host
-                    else:
-                        self.laser.transport = self.rp.uart(service_url=self.config.get('uart_url'), token=self.uart_setup.token())
+                    self.laser.transport = self.rp.uart(service_url=self.config.get('uart_url'), token=self.uart_setup.token())
                 if self.runtime:
                     self.rp.connected = False
                     self.connection_monitor.record('rp', None)
                     self.connection_monitor.record('laser', None)
+                    self.laser_connected = False
                     self.connection_setup = {'stage': '正在查找 RP；必要时通过 CON 恢复网络',
                                              'network': None, 'uart': None}
                 try:
                     if self.runtime:
                         self.connection_setup['network'] = self.uart_setup.prepare_network(host)
-                        self.connection_setup['stage'] = '正在连接 RP 控制后台'
-                    try:
-                        if self.runtime:
-                            self.runtime.ensure(host)
-                            self.rp.client = self.runtime.client
-                        result = self.rp.connect()
-                    except BridgeConnectionLost as exc:
-                        if not self.runtime:
-                            raise
-                        # A lost socket does not prove the FPGA outputs are idle.
-                        # Preserve the apparatus until idle can be read back.
-                        from a221_workbench.instruments.redpitaya.bridge_version import assert_idle
-                        assert_idle(self.runtime.client)
-                        # Only an explicit connect action may recover once. No
-                        # retries of acquisition or device writes are introduced.
-                        self.connection_setup['recovery_reason'] = str(exc)
                         self.connection_setup['restart'] = self._restart_backend(host)
                         result = self.rp.bridge_status
-                    self.check_rf_correction(apply=True)
+                    else:
+                        result = self.rp.connect()
+                        self.check_rf_correction(apply=True)
                 except Exception as exc:
                     self.connection_setup['stage'] = str(exc)
                     self.connection_setup['diagnostics'] = getattr(exc, 'diagnostics', None)

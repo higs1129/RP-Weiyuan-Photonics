@@ -47,11 +47,10 @@ async function refresh(){
  window.dispatchEvent(new Event('connection-state'));
 }
 await refresh();
-async function connectDevices(restart=false){
+async function connectDevices(){
  if(cache.checkingConnections)return;
  cache.checkingConnections=true;cache.connectionError=null;
  document.querySelector('#connect').disabled=true;
- document.querySelector('#restartRp').disabled=true;
  window.dispatchEvent(new Event('connection-state'));
  let polling=false;
  const progress=setInterval(async()=>{
@@ -63,33 +62,26 @@ async function connectDevices(restart=false){
  },1000);
  try{
  const host=document.querySelector('#host').value.trim();
- const result=await api(restart?'rp/restart':'connect',{host});
+ const result=await api('connect',{host});
  document.querySelector('#connect').textContent='连接并启动';
  if(result.laser?.ok)cache.laser={status:result.laser.status,time:new Date().toLocaleTimeString()};
  const notes=[];
- if(result.setup?.restart?.ok)notes.push('失效 PyRPL 后台已自动重建，RP 输出已关闭；需要扫频时点击“恢复扫频”');
+ if(result.setup?.restart?.ok)notes.push('PyRPL 后台已重启，RP 输出已关闭；需要扫频时点击“恢复扫频”');
  if(result.setup?.network?.recovered)notes.push(result.setup.network.persistent?'已恢复百兆网络并保存开机设置':'已临时恢复百兆网络');
  if(result.setup?.network?.warning)notes.push(result.setup.network.warning);
  if(result.setup?.uart?.warning)notes.push(result.setup.uart.warning);
  if(result.setup?.uart?.persistent)notes.push('串口服务已设为开机启动');
  if(result.setup?.uart?.credential_synced)notes.push('已核验并同步 RP 现有串口凭据');
- if(restart){
-  const forced=result.old?.forced_pids?.length?'旧后台未正常退出，已定向结束；':'';
-  status(forced+'新 PyRPL 后台已就绪，RP 输出已确认关闭。需要扫频时点击“恢复扫频”。'+(notes.length?notes.join('；'):''));
- }else{
   status((result.laser?.ok?'RP 与激光器通信正常；已进入调试模式，TEC / LD 已开启':'RP 已连接；激光器通信或启动未完成：'+result.laser?.error)+(notes.length?'。'+notes.join('；'):''),!result.laser?.ok);
- }
 }catch(e){cache.connectionError=e.message;}finally{
  clearInterval(progress);
  cache.checkingConnections=false;cache.connectionCheckedAt=new Date().toLocaleString();
  cache.connectionMonitorError=null;cache.connectionMonitorDeferred=null;
  document.querySelector('#connect').disabled=false;
- document.querySelector('#restartRp').disabled=false;
  try{await refresh();}catch(e){status('无法读取仪器台状态：'+e.message,true);}
  window.dispatchEvent(new Event('connection-state'));
 }}
 document.querySelector('#connect').onclick=()=>connectDevices();
-document.querySelector('#restartRp').onclick=()=>connectDevices(true);
 document.querySelector('#pyrpl').onclick=async()=>{try{
  await api('pyrpl/show');status('已打开 PyRPL · 与仪器台共享同一台 RP');
 }catch{}finally{await refresh();}};

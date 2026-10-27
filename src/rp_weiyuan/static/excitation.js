@@ -63,7 +63,7 @@ export function mountExcitation(root,{api,cache,status,info},view){
  $('exStart').onclick=async()=>{
   if(busy||token||disposed)return;
   if(!info.connected||!info.excitation_supported){
-   const message=!info.connected?'请先连接 RP；尚未发送激励。':'设备后台仍是旧版，尚未发送激励。请暂停采集、停止守护，然后在“仪器连接”点击“重启 RP 后台”（不是关闭网页后重开）。';
+   const message=!info.connected?'请先连接 RP；尚未发送激励。':'设备后台仍是旧版，尚未发送激励。请暂停采集、停止守护，然后在“仪器连接”点击“连接并启动”（会重启 RP 后台）。';
    text(message);status(message,true);return;
   }
   if($('exMode').value==='periodic_burst'&&!info.periodic_burst_supported){text('当前后台不支持周期 burst，请停止采集和守护后重启 RP 后台');return;}

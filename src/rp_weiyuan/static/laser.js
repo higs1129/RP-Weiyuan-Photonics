@@ -9,7 +9,7 @@ export function mount(root,{api,cache,info}){
  <div class="toolbar laser-toolbar"><button id="read" class="primary">读取一次</button><span id="laserReadState" role="status">单次读取模式</span><span class="timestamp" id="laserTime">尚未读取</span></div>
  <div class="metrics"><div class="metric"><span>TEC 实际温度 / °C</span><strong id="temp">—</strong><small id="tempSetValue">设定读回：—</small></div><div class="metric"><span>LD 实际电流 / mA</span><strong id="current">—</strong><small id="currentSetValue">设定读回：—</small></div><div class="metric"><span>控制模式</span><strong id="modeValue">—</strong></div></div>
  <div class="laser-operating"><span id="tecEnabled">TEC 温控：尚未读取</span><span id="ldEnabled">LD 电流输出：尚未读取</span><div id="laserOperatingNote"></div></div>
- <p class="muted">手动范围：温度 ${tmin}–${tmax} ℃，电流 ${imin}–${imax} mA。初始工作点：${t0} ℃ / ${i0} mA。点击读取或设置参数后更新一次状态，不自动刷新。</p>
+ <p class="muted">手动范围：温度 ${tmin}–${tmax} ℃，电流 ${imin}–${imax} mA。初始工作点：${t0} ℃ / ${i0} mA。设置后立即确认设定值；实际温度、电流及开关通过“读取一次”刷新。</p>
  <p><button id="laserInitialize">应用初始值 · ${t0} ℃ / ${i0} mA</button></p>
  <div class="fields"><label>设定温度 / °C<input id="temperatureInput" type="number" step="0.01" min="${tmin}" max="${tmax}" value="${t0}" required></label><button id="setTemp">设置温度</button><label>设定电流 / mA<input id="currentInput" type="number" step="0.01" min="${imin}" max="${imax}" value="${i0}" required></label><button id="setCurrent">设置电流</button></div>
  <details><summary>完整状态与设定值</summary><pre id="detail">尚未读取</pre></details></div>`;
@@ -40,7 +40,7 @@ export function mount(root,{api,cache,info}){
   const enabled=value=>value===true?'已开启':value===false?'已关闭':'未知';
   $('tecEnabled').textContent=(stale?'上次 ':'')+'TEC 温控：'+enabled(s.tec_enabled);
   $('ldEnabled').textContent=(stale?'上次 ':'')+'LD 电流输出：'+enabled(s.ld_enabled);
-  $('laserOperatingNote').textContent=s.tec_enabled===false?'TEC 已关闭：可写入温度设定值，但不会自动调温。“运行”是控制模式，不代表温控已开启。':s.ld_enabled===false?'LD 输出已关闭，实际电流不会跟随设定值。':'';
+  $('laserOperatingNote').textContent=stale?'实际值及 TEC / LD 开关显示的是上次读数，请点击“读取一次”刷新。':s.tec_enabled===false?'TEC 已关闭：可写入温度设定值，但不会自动调温。“运行”是控制模式，不代表温控已开启。':s.ld_enabled===false?'LD 输出已关闭，实际电流不会跟随设定值。':'';
   $('detail').textContent=JSON.stringify(s,null,2);
  }
  function enqueue(action,body){
