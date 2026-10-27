@@ -56,7 +56,7 @@ def verify(root, manifest):
 
 
 def source_files(project):
-    files = [project / 'pyproject.toml', project / 'tools/run.py', project / 'tools/probe.py']
+    files = [project / 'pyproject.toml', project / 'tools/run.py', project / 'tools/probe.py', project / 'tools/lifecycle.py']
     files += sorted(p for p in (project / 'src').rglob('*')
                     if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc')
     return files
@@ -277,6 +277,9 @@ def main():
     current_file = home / 'current.json'
     environment(home)
     with exclusive(home / 'application.lock'):
+        # A closed CMD releases application.lock before detached cleanup finishes.
+        with exclusive(home / 'session.lock'):
+            pass
         recover_update(home, config, log)
         current = read(current_file) if current_file.exists() else None
         if current and current.get('product') != 'rp-weiyuan-standalone':
@@ -342,8 +345,9 @@ def main():
         python, release = state_paths(current, home)
         environment(home, python)
         print('正在启动 RP*微源光子测控平台 ' + current['version'] + '；在页面中点击连接才会操作仪器。', flush=True)
-        code = subprocess.call([str(python), '-I', '-X', 'utf8', str(release / 'tools/run.py'),
-                                '--real', '--config', str(config), '--open-browser'], cwd=home)
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from lifecycle import launch
+        code = launch(python, release, home, config)
         if code:
             raise RuntimeError('Platform exited with code ' + str(code))
 

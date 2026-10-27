@@ -21,6 +21,14 @@ def prepare():
 
 
 if __name__ == '__main__':
+    import os
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from lifecycle import SessionOwner
+    owner = None
+    if os.environ.get('RP_WEIYUAN_LAUNCH_PARENT'):
+        owner = SessionOwner(os.environ['RP_WEIYUAN_LAUNCH_PARENT'],
+                             os.environ['RP_WEIYUAN_SESSION_READY'],
+                             os.environ['RP_WEIYUAN_SESSION_LOCK'])
     prepare()
     from rp_weiyuan.server import main
-    main()
+    main(owner=owner)

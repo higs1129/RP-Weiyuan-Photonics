@@ -76,7 +76,5 @@ export function mount(root,context,page){
   if(!disposed)timer=setTimeout(poll,1500);
  }
  queue(()=>{}).then(poll);
- const pagehide=()=>fetch('/api/observation/close',{method:'POST',headers:{'Content-Type':'application/json','X-Instrument-Console':'1'},body:'{}',keepalive:true}).catch(()=>{});
- window.addEventListener('pagehide',pagehide);
- return ()=>{disposed=true;clearTimeout(timer);window.removeEventListener('pagehide',pagehide);cleanupExcitation();queue(()=>info.connected?api('observation/close',{}, {quiet:true}):null).catch(e=>status(e.message,true));};
+ return ()=>{disposed=true;clearTimeout(timer);cleanupExcitation();queue(()=>info.connected?api('observation/close',{}, {quiet:true}):null).catch(e=>status(e.message,true));};
 }

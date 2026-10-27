@@ -316,8 +316,12 @@ class LockController:
             self._update(state='error', active=False, error=str(exc), cleanup_error=cleanup,
                          message=str(exc) + (('; 关闭反馈未确认：' + cleanup) if cleanup else ''))
 
-    def stop(self):
+    def request_stop(self):
+        """Cancel the worker before session-wide output shutdown; no register writes."""
         self._stop.set()
+
+    def stop(self):
+        self.request_stop()
         thread = self._thread
         if thread and thread.is_alive():
             self.rp.stop_acquisition()

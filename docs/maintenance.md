@@ -8,13 +8,13 @@ RP 网络发现、百兆恢复、底层寄存器/串口协议和通用分析属�
 
 ## 固定公共依赖
 
-当前使用 `a221-workbench==0.2.32`，wheel SHA256 为：
+当前使用 `a221-workbench==0.2.34`，wheel SHA256 为：
 
 ```
-1c7d2414b40795f82908fe59f22879199bc297d4fc0061a2b8a711a5c9797437
+a5e748f4ed84a654341ca5084f2d4f46454452f2906da9b8d8aeca508aa476bc
 ```
 
-配套原始源码归档位于 `dependencies/upstream/a221-workbench-0.2.32-source.zip`；来源提交记录在 `dependencies/PROVENANCE.json`。本产品只使用自己的 `rp_weiyuan` 界面和已安装的公共驱动。
+配套原始源码归档位于 `dependencies/upstream/a221-workbench-0.2.34-source.zip`；来源提交记录在 `dependencies/PROVENANCE.json`。本产品只使用自己的 `rp_weiyuan` 界面和已安装的公共驱动。
 
 升级公共库时，同时调整 `pyproject.toml` 的精确依赖、`dependencies/requirements.lock`、对应 wheel、`dependencies/manifest.json` 中的包版本与文件 SHA256，以及来源记录。删除旧 wheel，避免离线目录中混入多个版本。先在独立验证目录确认安装、关键功能与数值口径，再提交。
 

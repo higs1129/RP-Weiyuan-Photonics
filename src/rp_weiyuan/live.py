@@ -81,7 +81,7 @@ class LiveAcquisition:
             while not self._stop.is_set():
                 started = time.monotonic()
                 with self._lock:
-                    if started - self._last_seen > self.lease_s:
+                    if self.lease_s is not None and started - self._last_seen > self.lease_s:
                         self._stop.set()
                         break
                 if not self.gate()['ready']:

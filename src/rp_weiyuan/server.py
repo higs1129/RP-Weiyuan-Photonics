@@ -26,7 +26,8 @@ from rp_weiyuan.laser_startup import start_debug
 from rp_weiyuan.laser_settings import set_confirmed
 from rp_weiyuan.live import LiveAcquisition
 from rp_weiyuan.native_observation import Observation
-from a221_workbench.tasks.redpitaya.restart_bridge import restart_bridge
+from a221_workbench.tasks.redpitaya.restart_bridge import restart_bridge, stop_bridge
+from .session_excitation import SessionExcitation
 from .configuration import configured_host, spectrum_correction, verify_correction, input_ranges
 STATIC = Path(__file__).parent / 'static'
 
@@ -51,7 +52,12 @@ class Session:
         self.laser_error = None
         self.connection_setup = {'stage': '尚未连接', 'network': None, 'uart': None}
         self.runtime = BridgeRuntime(bridge, state_dir=configuration_dir('weiyuan_rp') / '.runtime', python=self.config.get('pyrpl_python'), auto_select=auto_bridge, upgrade_idle=True)
-        self.live = LiveAcquisition(self.rp, simulated=False)
+        self.closing = threading.Event()
+        self._requests = threading.Condition()
+        self._request_count = 0
+        self.owned_backends = []
+        self.excitation_session = SessionExcitation(self.rp)
+        self.live = LiveAcquisition(self.rp, simulated=False, lease_s=None)
         self.live.validate_capture = self.validate_capture
         self.observation = Observation(self.rp)
         self.lock = LockController(self.rp, self.live, self.config.get('lock_defaults'))
@@ -60,6 +66,11 @@ class Session:
         self._acquisition_control = threading.RLock()
 
     def info(self):
+        result = self._info()
+        result['excitation_run'] = self.excitation_session.state()
+        return result
+
+    def _info(self):
         return {'ok': True, 'simulated': False, 'host': self.rp.host, 'connected': self.rp.connected, 'periodic_burst_supported': bool(self.rp.connected and (self.rp.bridge_status or {}).get('excitation_protocol', 0) >= 3), 'excitation_supported': bool(self.rp.connected and (self.rp.bridge_status or {}).get('excitation_protocol', 0) >= 2), 'lock': self.lock.status(), 'lock_defaults': self.lock.defaults, 'laser_connected': self.laser_connected, 'laser_error': self.laser_error, 'bridge_url': self.rp.client.base, 'rp_address': (self.rp.bridge_status or {}).get('bridge', {}).get('hostname') if self.rp.connected else None, 'uart_url': getattr(self.laser.transport, 'base_url', None), 'laser_limits': LIMITS, 'laser_initial': INITIAL, 'source_version': self.config.get('source_version', ''), 'connection_health': self.connection_monitor.snapshot(), 'connection_diagnostics': self.connection_setup.get('diagnostics'), 'input_ranges': self.input_ranges, 'rf_chain': self.config.get('rf_chain'), 'rf_correction_expected': self.rf_correction, 'rf_correction_readback': self.rf_readback}
 
     def check_rf_correction(self, *, apply=False):
@@ -161,11 +172,18 @@ class Session:
         self.rp.connected = False
         client = self.runtime.client_for_restart(host)
         self.connection_setup['stage'] = '正在核验并退出旧后台，然后启动新 PyRPL'
+        def started(process, report):
+            self.runtime.process = process
+            self.owned_backends.append((host, client.base, report['instance_token']))
+        def check_open():
+            if self.closing.is_set():
+                raise RuntimeError('平台正在关闭')
         result = restart_bridge(host, bridge_url=client.base,
                                 python=self.runtime.python,
                                 state_dir=self.runtime.state_dir / 'restarts',
                                 timeout_s=self.runtime.timeout_s,
-                                _on_started=lambda process, _: setattr(self.runtime, 'process', process))
+                                _on_started=started, _before_stop=check_open)
+        check_open()
         if not result.get('ok'):
             raise RuntimeError('RP 后台重启失败（' + result.get('stage', 'unknown') + '）：'
                                + result.get('error', '') + '；日志：' + str(result.get('log_path', '未生成')))
@@ -178,6 +196,18 @@ class Session:
         return result
 
     def dispatch(self, action, body):
+        with self._requests:
+            if self.closing.is_set():
+                raise RuntimeError('平台正在关闭，未执行新操作')
+            self._request_count += 1
+        try:
+            return self._dispatch(action, body)
+        finally:
+            with self._requests:
+                self._request_count -= 1
+                self._requests.notify_all()
+
+    def _dispatch(self, action, body):
         if action.startswith('observation/'):
             command = action.split('/')[1]
             with self._acquisition_control:
@@ -210,7 +240,10 @@ class Session:
             if not (self.rp.bridge_status or {}).get('supports_excitation') or (action == 'excitation/run' and (self.rp.bridge_status or {}).get('excitation_protocol', 0) < 2):
                 raise RuntimeError('设备后台仍是旧版，未发送激励控制请求。请暂停采集、停止守护，在“仪器连接”点击“重启 RP 后台”；关闭网页或重开平台不会更新这个后台。')
         if action in ('excitation/stop', 'excitation/keepalive'):
-            return self.rp.excitation.control(action.split('/')[1], body['run_id'])
+            result = self.rp.excitation.control(action.split('/')[1], body['run_id'])
+            if action == 'excitation/stop' or not result.get('active'):
+                self.excitation_session.forget(body['run_id'])
+            return result
         if action == 'excitation/run':
             from a221_workbench.instruments.redpitaya.excitation import validate
             settings = validate(body['settings'])
@@ -228,6 +261,7 @@ class Session:
                     result = self.rp.excitation.run(settings, run_id=body['run_id'], native_observation=True)
                 else:
                     result = self.rp.excitation.run(settings, run_id=body['run_id'])
+                self.excitation_session.remember(result, settings)
                 if 'capture' in result:
                     after = self.lock.gate()
                     if not after['ready'] or before['epoch'] != after['epoch']:
@@ -252,10 +286,13 @@ class Session:
             if body['kind'] == 'spectrum':
                 self.check_rf_correction()
             with self._acquisition_control:
+                if self.live.busy and getattr(self.live, 'view', None) == body.get('view', 'time') and self.live.kind == body['kind']:
+                    return self.live.read(self.live.run_id)  # reattach after browser refresh
                 self.observation.close()
                 settings = self.observation_settings(body['kind'], body.get('settings', {}), view=body.get('view', 'time'))
                 if body['kind'] == 'scope' and settings.get('trigger_source') == 'asg1' and not (self.rp.bridge_status or {}).get('scope_trigger_wait_revision'):
                     raise RuntimeError('RP 后台尚未更新触发等待修复；请暂停采集、停止激励和守护，再在仪器连接中重启 RP 后台')
+                self.live.view = body.get('view', 'time')
                 return self.live.start(body['kind'], settings, fps=float(body.get('fps', 8)), timeout_s=float(body.get('timeout_s', 20)))
         if action in ('live/latest', 'live/pause', 'live/release'):
             return self.live.read(body['run_id'], after=int(body.get('after', 0)), full=action == 'live/pause', pause=action != 'live/latest')
@@ -344,10 +381,7 @@ class Session:
                 raise ValueError('当前是模拟模式，请从真实设备入口启动后打开 PyRPL')
             if not self.rp.connected:
                 with self._connection_guard:
-                    self.runtime.ensure(self.rp.host)
-                    self.rp.client = self.runtime.client
-                    self.rp.connect()
-                    self.check_rf_correction(apply=True)
+                    self._restart_backend(self.rp.host)
             if not self.rp.bridge_status.get('supports_gui'):
                 raise RuntimeError('当前 bridge 版本不支持打开窗口；需使用新版 bridge，不会启动第二个实例')
             return self.rp.request('/gui/' + action.split('/')[1])
@@ -448,7 +482,7 @@ def make_server(address, session):
                 self.reply(400, {'ok': False, 'error': str(exc)})
     return ThreadingHTTPServer(address, Handler)
 
-def main():
+def main(*, owner=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--real', action='store_true', required=True, help='Select the real instrument console; the demo has been removed')
     parser.add_argument('--host', default=None)
@@ -469,23 +503,42 @@ def main():
     print(f"{'REAL DEVICES'}: {url}", flush=True)
     if args.open_browser:
         threading.Thread(target=webbrowser.open, args=(url,), daemon=True).start()
+    def request_shutdown():
+        session.closing.set()
+        server.shutdown()
+    if owner:
+        owner.ready(url, request_shutdown)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        session.closing.set()
+        session.excitation_session.close()
         session.live.close()
+        session.lock.request_stop()
         try:
-            if session.lock.status()['active']:
-                session.lock.stop()
-        finally:
-            server.server_close()
             if session.rp.connected:
                 try:
-                    session.observation.close()
-                    session.observation.resume()
+                    session.rp.stop_acquisition()
                 except Exception:
-                    logging.exception('Closing native observation failed')
+                    logging.exception('Acquisition cancellation was not acknowledged')
+            # No late request may enable outputs after the final off readback.
+            with session._requests:
+                session._requests.wait_for(lambda: session._request_count == 0)
+            try:
+                session.lock.stop()
+                session.live.stop_and_wait()
+            except Exception:
+                logging.exception('Task shutdown failed; attempting verified backend shutdown')
+            # Wait out an in-flight connection so no new backend can appear after cleanup.
+            with session._connection_guard:
+                for host, base, token in reversed(session.owned_backends):
+                    result = stop_bridge(host, bridge_url=base, stop_timeout_s=3,
+                                         expected_instance_token=token)
+                    print('Session shutdown: ' + json.dumps(result, ensure_ascii=False), flush=True)
+        finally:
+            server.server_close()
             session.laser.close()
             session.rp.close()
 if __name__ == '__main__':

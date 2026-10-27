@@ -13,11 +13,11 @@ export function mountExcitation(root,{api,cache,status,info},view){
  <label id="exAutoLabel"><input type="checkbox" id="exAuto" checked>按 burst 自动匹配采集时长（观察较慢响应时可取消并手动加长）</label>
  <p id="exPlan" class="muted">burst 采集时长按频率和每包周期数自动匹配；触发前后留有余量。</p>
  <div class="toolbar"><button id="exStart" class="primary">发出 burst</button><button id="exStop" disabled>停止激励</button><span id="exState" role="status">未开启输出</span></div>
- <p class="muted">激励与观察独立控制：需要观察响应时，选择下方 ASG1 内部同步触发并运行采集。单次 burst 每点击一次发一包；周期 burst 持续自动发包，点停止结束。同步观察按触发刷新；自由采集可看多包变化，均不保证无间断记录每一包。幅度为 PyRPL 峰值（Vpp = 2 × 幅度），未补偿外部负载。离开或隐藏页面停止激励；丢失心跳后约 10 秒停止连续输出。</p></details>`;
+ <p class="muted">激励与观察独立控制：需要观察响应时，选择下方 ASG1 内部同步触发并运行采集。单次 burst 每点击一次发一包；周期 burst 持续自动发包，点停止结束。同步观察按触发刷新；自由采集可看多包变化，均不保证无间断记录每一包。幅度为 PyRPL 峰值（Vpp = 2 × 幅度），未补偿外部负载。切换功能页停止本次激励；后台连接丢失后约 10 秒停止连续输出。</p></details>`;
  const $=id=>root.querySelector('#'+id);
  if(view.native){
   $('exObserveLabel').lastChild.textContent='发送时在 PyRPL Scope 单次采集（先等待触发）';
-  root.querySelector('.excitation>p:last-child').textContent='网页只设置激励，不采集波形。Scope：CH1=ASG1，CH2=IN2；用双游标测量时间差。切到 PyRPL 窗口继续输出；关闭原生观察窗口、离开本功能页或关闭平台会停止本次激励。周期 burst 由 FPGA 定时，采集不保证每包无遗漏。';
+  root.querySelector('.excitation>p:last-child').textContent='网页只设置激励，不采集波形。Scope：CH1=ASG1，CH2=IN2；用双游标测量时间差。切到 PyRPL 窗口继续输出；关闭原生观察窗口或切换功能页会停止本次激励。周期 burst 由 FPGA 定时，采集不保证每包无遗漏。';
  }
  let disposed=false,token=null,busy=false,heartbeat=null,samples=null;
  const fields=['exMode','exWave','exFreq','exAmp','exOffset','exCycles','exPeriod'];
@@ -55,7 +55,7 @@ export function mountExcitation(root,{api,cache,status,info},view){
  function text(value){if(!disposed)$('exState').textContent=value;}
  async function stop(){
   clearInterval(heartbeat);const id=token;if(!id)return;
-  try{await api('excitation/stop',{run_id:id},{quiet:true});if(token===id)token=null;text('激励已停止');}
+  try{await api('excitation/stop',{run_id:id},{quiet:true});if(token===id)token=null;info.excitation_run=null;text('激励已停止');}
   catch(e){text('未确认输出关闭：'+e.message);status('未确认激励关闭：'+e.message,true);}
   finally{if(!disposed)update();}
  }
@@ -82,21 +82,25 @@ export function mountExcitation(root,{api,cache,status,info},view){
    if(view.native){const singleCapture=config.observe;config.observe=false;await view.prepareExcitation(config,capturePlan,singleCapture);}
    else if(config.observe){await view.halt();view.setDuration(config.duration);}
    else if(capturePlan)await view.prepareBurst(capturePlan,config.mode==='burst');
-   if(disposed||token!==id||(!view.native&&document.hidden))return;
+   if(disposed||token!==id)return;
    // Heartbeat also keeps a deliberately cancelled/expired run from restarting.
    const result=await api('excitation/run',{run_id:id,settings:config,...(view.native?{native_observation:true}:{})},{quiet:true});
-   if(disposed||token!==id||(!view.native&&document.hidden)){await api('excitation/stop',{run_id:id},{quiet:true});return;}
+   info.excitation_run=result.active?{run_id:id,settings:config}:null;
+   if(disposed||token!==id){await api('excitation/stop',{run_id:id},{quiet:true});return;}
    if(result.capture){token=null;view.show(result);text('burst 完成 · 输出已关闭；t=0 为内部事件，未校准 OUT1 起点');}
    else{
     text(`${config.mode==='burst'?'已发出 burst':config.mode==='periodic_burst'?'周期 burst 输出中':'连续输出中'} · 实际频率 ${Number(result.actual.frequency).toPrecision(6)} Hz${config.mode==='periodic_burst'?` · 配置重复周期 ${Number(result.actual.nominal_burst_period).toPrecision(6)} s`:''}`);
-    heartbeat=setInterval(async()=>{try{const state=await api('excitation/keepalive',{run_id:id},{quiet:true});if(!state.active&&token===id){clearInterval(heartbeat);token=null;text('burst 已结束 · 输出已关闭');if(!disposed)update();}}catch(e){text(e.message);stop();}},config.mode==='burst'?300:2000);
+    monitor(id,config.mode);
    }
   }catch(e){await stop();text(e.message);}
   finally{busy=false;if(!disposed)update();}
  };
- const controller=new AbortController();
- document.addEventListener('visibilitychange',()=>{if(document.hidden&&!view.native)stop();},{signal:controller.signal});
- window.addEventListener('pagehide',()=>{if(token)fetch('/api/excitation/stop',{method:'POST',headers:{'Content-Type':'application/json','X-Instrument-Console':'1'},body:JSON.stringify({run_id:token}),keepalive:true}).catch(()=>{});},{signal:controller.signal});
+ function monitor(id,mode){
+  clearInterval(heartbeat);
+  heartbeat=setInterval(async()=>{try{const state=await api('excitation/keepalive',{run_id:id},{quiet:true});if(!state.active&&token===id){clearInterval(heartbeat);token=null;info.excitation_run=null;text('激励已结束');if(!disposed)update();}}catch(e){text('状态读取失败：'+e.message+'；可点击停止激励');}},mode==='burst'?300:2000);
+ }
+ if(info.excitation_run){token=info.excitation_run.run_id;text('本次 CMD 会话的激励仍在运行；可点击停止激励');monitor(token,info.excitation_run.settings.mode);}
+ root.querySelector('.excitation>p:last-child').textContent += ' 关闭或隐藏网页不停止实验；关闭 launch CMD 会停止本次会话及 RP 输出。';
  update();
- return ()=>{disposed=true;controller.abort();clearInterval(heartbeat);const pending=stop();cache.acquisitionHandoff=Promise.all([cache.acquisitionHandoff,pending]);};
+ return ()=>{disposed=true;clearInterval(heartbeat);const pending=stop();cache.acquisitionHandoff=Promise.all([cache.acquisitionHandoff,pending]);};
 }

@@ -1,6 +1,6 @@
 # RP*微源光子测控平台
 
-独立的 Windows 测控应用，连接 Red Pitaya 与微源激光器。当前应用版本 **0.3.9**，公共设备库固定为 **a221-workbench 0.2.32**，PyRPL 固定为 **0.9.8.0**。名称中的 `*` 用于界面，文件夹使用 `RP-Weiyuan-Photonics`。
+独立的 Windows 测控应用，连接 Red Pitaya 与微源激光器。当前应用版本 **0.3.10**，公共设备库固定为 **a221-workbench 0.2.34**，PyRPL 固定为 **0.9.8.0**。名称中的 `*` 用于界面，文件夹使用 `RP-Weiyuan-Photonics`。
 
 时域和频域观察使用同一后台的 PyRPL 原生窗口；时域支持 ASG1 / IN2 双游标测时。详见 [原生观察说明](docs/native-observation.md)。
 
@@ -14,6 +14,8 @@
 默认 IN1=HV、IN2=LV；放大器增益默认 23 dB，但放大器和 Bias-T 默认禁用，需按实际接线填写。量程为人工接线记录，未增加 HV 电压换算。详见 [配置与设备说明](docs/configuration.md)。
 
 本目录含 Python 安装程序、37 个固定依赖包、CON 驱动与许可资料，可离线安装。已安装的 Python 3.10 x64 仅用于创建新环境，不覆盖它的包。缺失且有官方来源的资源允许按校验清单补下载；可在配置中关闭下载。
+
+关闭网页不停止实验；关闭 launch CMD 会结束本次采集、守护、RP 输出和后台。激光器 TEC / LD 状态不变。详见 [会话生命周期说明](docs/session-lifecycle.md)。
 
 ## 修改和更新
 

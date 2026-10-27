@@ -1,12 +1,12 @@
 {
-  "application": "0.3.9",
+  "application": "0.3.10",
   "python": "3.10.11 (Python Software Foundation signed installer)",
   "pyrpl_commit": "81beee5cf5e3651e66b5dec5103a355fca07fa30",
   "pyrpl_source_sha256": "aeeff6de873491e22c77beb3d3521a8063545baa30cbe0ff89fa696210d2bdb1",
   "drivers": "FTDI 2.12.36.20; original signed ftdibus and ftdiport packages exported from Windows driver store, no device settings",
   "driver_reference": "https://ftdichip.com/drivers/vcp-drivers/",
   "packages": {
-    "a221-workbench": "0.2.32",
+    "a221-workbench": "0.2.34",
     "bcrypt": "5.0.0",
     "cffi": "2.0.0",
     "colorama": "0.4.6",
@@ -45,10 +45,10 @@
     "typing_extensions": "4.15.0"
   },
   "core_source": {
-    "version": "0.2.32",
-    "base_commit": "7f063086fec823b0866e5957ecf0a755badf6dad",
-    "commit": "5b0b128c26f4cbf1c86ce467fdac4140184b8fae",
-    "changes": "Scope averaging isolation for initialization and relock; source snapshot matches the committed library; see docs/asg1-excitation-change.md",
-    "sha256": "92e279c08b3a59245a01530429bde62f38e876af1cdcdbca12630f47e53d09bd"
+    "version": "0.2.34",
+    "base_commit": "5b0b128c26f4cbf1c86ce467fdac4140184b8fae",
+    "commit": "bc78f79d8ed6e0749a48b66af51eab38cecb7b48",
+    "changes": "Instance-scoped shutdown and verified monitor_server reuse; source snapshot matches the committed library; see docs/rp-session-lifecycle-change.md",
+    "sha256": "297d6da8b829645c0138000418e1f4dd460ff0f2e02dbf18bed8a89973e4e425"
   }
 }

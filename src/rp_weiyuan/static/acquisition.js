@@ -86,19 +86,19 @@ export function mount(root,context,page){
    }
    if(!data.running){buttons(false,data.stopping);state(data.stopping?'已暂停 · 等待当前帧结束':'已暂停');if(!data.stopping)return;}
    timer=setTimeout(()=>poll(ticket),100);
-  }catch(e){if(disposed||ticket!==epoch)return;buttons(false);state('连接中断，保留上次画面：'+e.message,true);release(runId).catch(()=>{});runId=null;}
+  }catch(e){if(disposed||ticket!==epoch)return;state('显示连接中断；后台采集状态未改变：'+e.message,true);timer=setTimeout(()=>poll(ticket),1500);}
  }
  function start(){
-  if(startPending||active||disposed||document.hidden)return Promise.resolve();
+  if(startPending||active||disposed)return Promise.resolve();
   if(!info.connected){state('请先在仪器连接中连接 RP');return Promise.resolve();}
   startPending=true;manualPause=false;
   return queue(async()=>{
-  if(disposed||document.hidden||manualPause)return;
+  if(disposed||manualPause)return;
   let config;try{if(burstPlan){const plan=await burstPlan();if(plan)setDuration(plan.duration);}config=settings();}catch(e){status(e.message,true);return;}
   const ticket=++epoch;buttons(false,true);state('正在启动…');
   try{
    const data=await api('live/start',{kind,view:page,settings:config,fps:Number($('fps').value)},{quiet:true});
-   if(disposed||ticket!==epoch||document.hidden){await release(data.run_id);if(!disposed){buttons(false);state('页面已隐藏，已暂停');}return;}
+   if(disposed||ticket!==epoch){await release(data.run_id);if(!disposed)buttons(false);return;}
    runId=data.run_id;sequence=0;shown=0;started=performance.now();buttons(true);state('● 连续运行');show(data);timer=setTimeout(()=>poll(ticket),100);
   }catch(e){if(!disposed){buttons(false);state(e.message,true);}}
   }).finally(()=>{startPending=false;});
@@ -134,8 +134,6 @@ export function mount(root,context,page){
  window.addEventListener('measurement-transition',()=>{manualPause=true;epoch++;clearTimeout(timer);buttons(false,true);queue(halt).catch(e=>status(e.message,true));state('采集已暂停 · 正在切换锁定/扫频');},{signal:controller.signal});
  window.addEventListener('measurement-resume',()=>{queue(()=>{}).then(()=>{if(!disposed){manualPause=false;start();}});},{signal:controller.signal});
  window.addEventListener('connection-state',()=>{if(!manualPause&&!active)start();},{signal:controller.signal});
- document.addEventListener('visibilitychange',()=>{if(document.hidden&&active)pause();},{signal:controller.signal});
- window.addEventListener('pagehide',()=>{if(runId)fetch('/api/live/release',{method:'POST',headers:{'Content-Type':'application/json','X-Instrument-Console':'1'},body:JSON.stringify({run_id:runId}),keepalive:true}).catch(()=>{});},{signal:controller.signal});
  const ageTimer=setInterval(()=>{if(lastTime!==null){const seconds=Math.max(0,(Date.now()-lastTime)/1000);$('age').textContent=`${seconds.toFixed(1)} 秒前`;$('age').className=active&&!waitingForTrigger&&seconds>2?'error':'';}},250);
  lockState();
  function setDuration(duration){if(Number($('duration').value)!==duration)axes.x=null;$('duration').value=duration;cache[page+'Settings'].duration=duration;}
