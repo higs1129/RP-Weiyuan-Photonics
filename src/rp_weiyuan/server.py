@@ -21,7 +21,7 @@ from a221_workbench.instruments.redpitaya.network import resolve_host
 from rp_weiyuan.locking import LockController
 from rp_weiyuan.connection import UartSetup
 from rp_weiyuan.connection_monitor import ConnectionMonitor
-from rp_weiyuan.laser_profile import LIMITS, INITIAL
+from rp_weiyuan.laser_profile import INITIAL
 from rp_weiyuan.laser_startup import start_debug
 from rp_weiyuan.laser_settings import set_confirmed
 from rp_weiyuan.live import LiveAcquisition
@@ -71,7 +71,7 @@ class Session:
         return result
 
     def _info(self):
-        return {'ok': True, 'simulated': False, 'host': self.rp.host, 'connected': self.rp.connected, 'periodic_burst_supported': bool(self.rp.connected and (self.rp.bridge_status or {}).get('excitation_protocol', 0) >= 3), 'excitation_supported': bool(self.rp.connected and (self.rp.bridge_status or {}).get('excitation_protocol', 0) >= 2), 'lock': self.lock.status(), 'lock_defaults': self.lock.defaults, 'laser_connected': self.laser_connected, 'laser_error': self.laser_error, 'bridge_url': self.rp.client.base, 'rp_address': (self.rp.bridge_status or {}).get('bridge', {}).get('hostname') if self.rp.connected else None, 'uart_url': getattr(self.laser.transport, 'base_url', None), 'laser_limits': LIMITS, 'laser_initial': INITIAL, 'source_version': self.config.get('source_version', ''), 'connection_health': self.connection_monitor.snapshot(), 'connection_diagnostics': self.connection_setup.get('diagnostics'), 'input_ranges': self.input_ranges, 'rf_chain': self.config.get('rf_chain'), 'rf_correction_expected': self.rf_correction, 'rf_correction_readback': self.rf_readback}
+        return {'ok': True, 'simulated': False, 'host': self.rp.host, 'connected': self.rp.connected, 'periodic_burst_supported': bool(self.rp.connected and (self.rp.bridge_status or {}).get('excitation_protocol', 0) >= 3), 'excitation_supported': bool(self.rp.connected and (self.rp.bridge_status or {}).get('excitation_protocol', 0) >= 2), 'lock': self.lock.status(), 'lock_defaults': self.lock.defaults, 'laser_connected': self.laser_connected, 'laser_error': self.laser_error, 'bridge_url': self.rp.client.base, 'rp_address': (self.rp.bridge_status or {}).get('bridge', {}).get('hostname') if self.rp.connected else None, 'uart_url': getattr(self.laser.transport, 'base_url', None), 'laser_initial': INITIAL, 'source_version': self.config.get('source_version', ''), 'connection_health': self.connection_monitor.snapshot(), 'connection_diagnostics': self.connection_setup.get('diagnostics'), 'input_ranges': self.input_ranges, 'rf_chain': self.config.get('rf_chain'), 'rf_correction_expected': self.rf_correction, 'rf_correction_readback': self.rf_readback}
 
     def check_rf_correction(self, *, apply=False):
         if self.rf_correction is not None:
@@ -132,12 +132,20 @@ class Session:
             return {'ok': True, 'status': status, 'simulated': False}
 
     def set_laser(self, action, body):
-        values = dict(INITIAL) if action == 'laser/initialize' else {action.split('/')[1]: float(body['value'])}
+        if action == 'laser/initialize':
+            values = dict(INITIAL)
+        else:
+            raw = body.get('value')
+            if raw is None or isinstance(raw, bool):
+                raise ValueError('请输入有效的温度或电流数值')
+            try:
+                value = float(raw)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError('请输入有效的温度或电流数值') from exc
+            values = {action.split('/')[1]: value}
         for (field, value) in values.items():
-            limits = LIMITS[field]
-            if not math.isfinite(value) or not limits[0] <= value <= limits[1]:
-                unit = '℃' if field == 'temperature' else 'mA'
-                raise ValueError(f'允许范围为 {limits[0]:g}–{limits[1]:g} {unit}')
+            if not math.isfinite(value):
+                raise ValueError('温度和电流必须为有限数值')
         with self._laser_guard:
             applied = []
             confirmed = {}

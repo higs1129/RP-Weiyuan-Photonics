@@ -3,7 +3,7 @@
 from __future__ import annotations
 import math
 from a221_workbench.instruments.weiyuan import REG_TEC_SET_DEBUG, REG_LD_SET_DEBUG, STATE_TEC, STATE_LD
-from .laser_profile import INITIAL, LIMITS
+from .laser_profile import INITIAL
 
 
 def start_debug(laser, previous):
@@ -16,8 +16,7 @@ def start_debug(laser, previous):
         ]:
             suffix = '_c' if field == 'temperature' else '_ma'
             value = previous[key + suffix]
-            lo, hi = LIMITS[field]
-            value = value if math.isfinite(value) and lo <= value <= hi else INITIAL[field]
+            value = value if math.isfinite(value) else INITIAL[field]
             targets[field] = value
             stage = '确认调试模式' + ('温度' if field == 'temperature' else '电流') + '设定'
             if not math.isclose(previous[key + '_debug' + suffix], value, rel_tol=0, abs_tol=.02):

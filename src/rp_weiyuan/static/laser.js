@@ -2,16 +2,15 @@
 let laserQueue=Promise.resolve();
 
 export function mount(root,{api,cache,info}){
- const [tmin,tmax]=info.laser_limits.temperature,[imin,imax]=info.laser_limits.current;
  const {temperature:t0,current:i0}=info.laser_initial;
  let disposed=false,reading=false,writing=false;
  root.innerHTML=`<h2>激光器</h2><p class="muted">调节温度和电流，移动工作点寻找模式。</p><div class="card">
  <div class="toolbar laser-toolbar"><button id="read" class="primary">读取一次</button><span id="laserReadState" role="status">单次读取模式</span><span class="timestamp" id="laserTime">尚未读取</span></div>
  <div class="metrics"><div class="metric"><span>TEC 实际温度 / °C</span><strong id="temp">—</strong><small id="tempSetValue">设定读回：—</small></div><div class="metric"><span>LD 实际电流 / mA</span><strong id="current">—</strong><small id="currentSetValue">设定读回：—</small></div><div class="metric"><span>控制模式</span><strong id="modeValue">—</strong></div></div>
  <div class="laser-operating"><span id="tecEnabled">TEC 温控：尚未读取</span><span id="ldEnabled">LD 电流输出：尚未读取</span><div id="laserOperatingNote"></div></div>
- <p class="muted">手动范围：温度 ${tmin}–${tmax} ℃，电流 ${imin}–${imax} mA。初始工作点：${t0} ℃ / ${i0} mA。设置后立即确认设定值；实际温度、电流及开关通过“读取一次”刷新。</p>
+ <p class="muted">软件未设置温度、电流上下限。初始工作点：${t0} ℃ / ${i0} mA。设置后立即确认设定值；实际温度、电流及开关通过“读取一次”刷新。</p>
  <p><button id="laserInitialize">应用初始值 · ${t0} ℃ / ${i0} mA</button></p>
- <div class="fields"><label>设定温度 / °C<input id="temperatureInput" type="number" step="0.01" min="${tmin}" max="${tmax}" value="${t0}" required></label><button id="setTemp">设置温度</button><label>设定电流 / mA<input id="currentInput" type="number" step="0.01" min="${imin}" max="${imax}" value="${i0}" required></label><button id="setCurrent">设置电流</button></div>
+ <div class="fields"><label>设定温度 / °C<input id="temperatureInput" type="number" step="0.01" value="${t0}" required></label><button id="setTemp">设置温度</button><label>设定电流 / mA<input id="currentInput" type="number" step="0.01" value="${i0}" required></label><button id="setCurrent">设置电流</button></div>
  <details><summary>完整状态与设定值</summary><pre id="detail">尚未读取</pre></details></div>`;
  const $=id=>root.querySelector('#'+id);
  // Keep unsent values across page navigation; changing the view never sends them.
@@ -93,7 +92,7 @@ export function mount(root,{api,cache,info}){
  $('read').onclick=()=>read();
  $('laserInitialize').onclick=()=>write('laser/initialize');
  for(const [button,input,action] of [['setTemp','temperatureInput','temperature'],['setCurrent','currentInput','current']]){
-  $(button).onclick=()=>{const el=$(input);if(el.value!==''&&el.reportValidity())write('laser/'+action,{value:Number(el.value)});};
+  $(button).onclick=()=>{const el=$(input);if(el.value!==''&&el.reportValidity()&&Number.isFinite(Number(el.value)))write('laser/'+action,{value:Number(el.value)});};
  }
  if(cache.laser)showCached();
  return ()=>{disposed=true;};

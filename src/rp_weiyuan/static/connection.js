@@ -7,7 +7,7 @@ export function mount(root,{info,cache}){
  </div><section id="connectionFailure" class="card" hidden aria-live="polite"><h3>连接检查未通过</h3><p id="failureSummary"></p><p id="failureBoard"></p><ul id="failureAdvice"></ul><details><summary>网络与服务诊断详情</summary><pre id="failureDetails" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></details></section><p class="muted">连接并启动：先重启 RP 后台并关闭 RP 输出，再进入激光器调试模式，依次开启 TEC 温控和 LD 电流输出。</p>
  <p id="rfChainSummary" class="muted"></p><details><summary>输入量程配置与跳线核对</summary><p id="inputRangeSummary"></p><p class="muted">这里显示 config.json 的用户配置，不是跳线自动检测结果。请按 RP 的实际跳线核对；软件不切换硬件量程，当前电压沿用 PyRPL 原始标度，未进行 HV 端口电压换算。</p></details><a class="next-step" href="#initialize">进入测量初始化 →</a>
  <details><summary>连接说明与状态灯含义</summary><p class="muted">填写新 RP 的标签名称；首次联网失败时，用 USB 数据线连接 RP 的 CON 口。</p><p class="muted">每分钟只读检查一次；采集、锁定或设备操作忙时延后。绿色：最近检查正常 · 红色：检查失败 · 黄色：待检查或结果过期 · 灰色：尚未连接。激光器通信正常不代表 TEC 或 LD 输出已开启。</p>
- <p class="muted">温度、电流沿用已读回且在允许范围内的设定；未满足范围时使用 35 ℃ / 260 mA。进入“测量初始化”调节温度、电流并锁定模式。</p></details>`;
+ <p class="muted">温度、电流沿用已读回的有效设定，不按软件上下限改回默认值；读回为非有限数值时使用 35 ℃ / 260 mA。进入“测量初始化”调节温度、电流并锁定模式。</p></details>`;
  const $=id=>root.querySelector('#'+id);
  function update(){
   for(const prefix of ['rp','laser']){
