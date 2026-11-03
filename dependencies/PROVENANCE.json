@@ -1,12 +1,12 @@
 {
-  "application": "0.3.11",
+  "application": "0.3.12",
   "python": "3.10.11 (Python Software Foundation signed installer)",
   "pyrpl_commit": "81beee5cf5e3651e66b5dec5103a355fca07fa30",
   "pyrpl_source_sha256": "aeeff6de873491e22c77beb3d3521a8063545baa30cbe0ff89fa696210d2bdb1",
   "drivers": "FTDI 2.12.36.20; original signed ftdibus and ftdiport packages exported from Windows driver store, no device settings",
   "driver_reference": "https://ftdichip.com/drivers/vcp-drivers/",
   "packages": {
-    "a221-workbench": "0.2.34",
+    "a221-workbench": "0.2.35",
     "bcrypt": "5.0.0",
     "cffi": "2.0.0",
     "colorama": "0.4.6",
@@ -45,10 +45,10 @@
     "typing_extensions": "4.15.0"
   },
   "core_source": {
-    "version": "0.2.34",
-    "base_commit": "5b0b128c26f4cbf1c86ce467fdac4140184b8fae",
-    "commit": "bc78f79d8ed6e0749a48b66af51eab38cecb7b48",
-    "changes": "Instance-scoped shutdown and verified monitor_server reuse; source snapshot matches the committed library; see docs/rp-session-lifecycle-change.md",
-    "sha256": "297d6da8b829645c0138000418e1f4dd460ff0f2e02dbf18bed8a89973e4e425"
+    "version": "0.2.35",
+    "base_commit": "bc78f79d8ed6e0749a48b66af51eab38cecb7b48",
+    "commit": "7339d1887704c4409437d0c735700f02593b6804",
+    "changes": "Committed 0.2.35 library: interface-aware RP discovery, explicit IPv4LL route repair and merged query-only TED4015 reader; source snapshot matches local main.",
+    "sha256": "d4ae1d830684b912ad6ac8514f8226253bc88a233c573b546f3804f24bca6ef8"
   }
 }

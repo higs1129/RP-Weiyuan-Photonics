@@ -32,7 +32,10 @@ async function api(action,body={},options={}){
   if(!r.ok||!data.ok)throw new Error(data.error||JSON.stringify(data));
   if(!options.quiet)status('操作完成 · '+new Date().toLocaleTimeString());
   return data;
- }catch(e){if(!options.quiet)status(e.message,true);throw e;}finally{busy.delete(lane);}
+ }catch(e){
+  if(e instanceof TypeError)e=new Error('网页与本机控制服务通信失败。请确认 launch 的 CMD 仍在运行；这不等于 RP 没有 IP。');
+  if(!options.quiet)status(e.message,true);throw e;
+ }finally{busy.delete(lane);}
 }
 const context={api,info,cache,status,connectDevices:()=>connectDevices()};
 async function refresh(){

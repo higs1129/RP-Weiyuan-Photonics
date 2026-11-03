@@ -45,6 +45,14 @@ class UartSetup:
             command += ['--console-port', self.config['rp_console_port']]
         return self._execute(command, timeout=180)
 
+    def discover_network(self, host):
+        python = runtime_python(self.config.get('pyrpl_python'))
+        command = [str(python), '-X', 'utf8', '-m',
+                   'a221_workbench.instruments.redpitaya.network_discovery', '--host', host]
+        if self.config.get('rp_console_port'):
+            command += ['--console-port', self.config['rp_console_port']]
+        return self._execute(command, timeout=120)['diagnostics']
+
     @staticmethod
     def _execute(command, *, timeout):
         result = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', timeout=timeout,

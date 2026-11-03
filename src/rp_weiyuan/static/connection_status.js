@@ -41,7 +41,7 @@ export function monitorConnections({info,cache,isBusy}){
    if(disposed)return;
    info.connection_health=result.connection_health;
    cache.connectionMonitorError=null;cache.connectionMonitorDeferred=null;
-  }catch(e){if(!disposed)cache.connectionMonitorError='自动检查未完成：'+e.message;}
+  }catch(e){if(!disposed)cache.connectionMonitorError=e instanceof TypeError?'网页与本机控制服务通信失败，请检查 launch 的 CMD；RP 状态尚未确认。':'自动检查未完成：'+e.message;}
   finally{pending=false;if(!disposed)window.dispatchEvent(new Event('connection-state'));}
  }
  function visible(){if(!document.hidden){update();check();}}

@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 import sys
 import threading
+import secrets
+import time
 from urllib.parse import urlparse
 import webbrowser
 from a221_workbench.instruments.redpitaya import RedPitaya
@@ -51,6 +53,9 @@ class Session:
         self.laser_connected = False
         self.laser_error = None
         self.connection_setup = {'stage': '尚未连接', 'network': None, 'uart': None}
+        self.network_discovery = None
+        self._network_report_time = 0
+        self._network_plan = None
         self.runtime = BridgeRuntime(bridge, state_dir=configuration_dir('weiyuan_rp') / '.runtime', python=self.config.get('pyrpl_python'), auto_select=auto_bridge, upgrade_idle=True)
         self.closing = threading.Event()
         self._requests = threading.Condition()
@@ -67,6 +72,7 @@ class Session:
 
     def info(self):
         result = self._info()
+        result['network_discovery'] = self.network_discovery
         result['excitation_run'] = self.excitation_session.state()
         return result
 
@@ -216,6 +222,34 @@ class Session:
                 self._requests.notify_all()
 
     def _dispatch(self, action, body):
+        if action.startswith('network/'):
+            with self._connection_guard:
+                if self.live.busy or self.lock.status()['active'] or self.rp.connected:
+                    raise RuntimeError('设备发现与路径修复用于未连接状态；请先结束实验并关闭本次平台会话，再重新打开')
+                if action == 'network/discover':
+                    self._network_plan = None
+                    report = self.uart_setup.discover_network(str(body.get('host', self.rp.host)).strip())
+                    self.network_discovery = report
+                    self._network_report_time = time.monotonic()
+                    return {'ok': True, 'diagnostics': report}
+                if action == 'network/plan':
+                    from a221_workbench.instruments.redpitaya.network_route import plan
+                    if not self.network_discovery or time.monotonic() - self._network_report_time > 120:
+                        raise RuntimeError('发现结果已过期，请重新查找 RP')
+                    preview = plan(self.network_discovery, body['target'], body['interface_index'])
+                    token = secrets.token_urlsafe(24)
+                    self._network_plan = (token, time.monotonic(), preview)
+                    return {'ok': True, 'plan': preview, 'plan_id': token}
+                if action == 'network/apply':
+                    from a221_workbench.instruments.redpitaya.network_route import apply
+                    current = self._network_plan
+                    self._network_plan = None
+                    if not current or not secrets.compare_digest(str(body.get('plan_id', '')), current[0]) or time.monotonic() - current[1] > 120:
+                        raise RuntimeError('修复预览已过期或已执行，请重新预览')
+                    result = apply(current[2], self.uart_setup.state_dir)
+                    self.network_discovery = None
+                    return result
+                raise ValueError('未知网络操作')
         if action.startswith('observation/'):
             command = action.split('/')[1]
             with self._acquisition_control:

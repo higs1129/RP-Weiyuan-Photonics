@@ -1,5 +1,7 @@
 import {connectionStatus} from './connection_status.js';
-export function mount(root,{info,cache}){
+import {mount as networkDiscovery} from './network_discovery.js';
+export function mount(root,context){
+ const {info,cache}=context;
  root.innerHTML=`<div class="connection-heading"><div class="page-heading"><h2>仪器连接</h2><p class="muted">连接设备后，进入测量初始化。</p></div><img class="home-brand" src="brand/iop-apc.png" width="520" height="130" alt="中国科学院物理研究所与应用物理中心标识"></div>
  <div id="connectionToolsSlot"></div><div class="connection-cards">
  <article class="card connection-card"><div class="connection-card-title"><h3>Red Pitaya</h3><span id="rpLamp" class="connection-lamp" aria-hidden="true"></span></div><strong id="rpConnectionStatus" role="status"></strong><p id="rpConnectionAddress" class="muted"></p><small id="rpChecked"></small></article>
@@ -9,6 +11,9 @@ export function mount(root,{info,cache}){
  <details><summary>连接说明与状态灯含义</summary><p class="muted">填写新 RP 的标签名称；首次联网失败时，用 USB 数据线连接 RP 的 CON 口。</p><p class="muted">每分钟只读检查一次；采集、锁定或设备操作忙时延后。绿色：最近检查正常 · 红色：检查失败 · 黄色：待检查或结果过期 · 灰色：尚未连接。激光器通信正常不代表 TEC 或 LD 输出已开启。</p>
  <p class="muted">温度、电流沿用已读回的有效设定，不按软件上下限改回默认值；读回为非有限数值时使用 35 ℃ / 260 mA。进入“测量初始化”调节温度、电流并锁定模式。</p></details>`;
  const $=id=>root.querySelector('#'+id);
+ const network=document.createElement('section');network.className='card';
+ $('connectionFailure').after(network);
+ const disposeNetwork=networkDiscovery(network,context);
  function update(){
   for(const prefix of ['rp','laser']){
    const current=connectionStatus(info,cache,prefix);
@@ -34,6 +39,7 @@ export function mount(root,{info,cache}){
    $('failureBoard').textContent=board?`RP ${(board.addresses||[]).join('、')||'无 IPv4 地址'} · ${board.speed>0?board.speed+' Mbps':'速率未确认'} · ${board.carrier==='1'?'物理链路正常':'无物理链路'}`:'';
    $('failureAdvice').replaceChildren(...(report.advice||['确认供电和接线后重试连接；保持 CON 数据线连接可获取板端信息。']).map(text=>{const li=document.createElement('li');li.textContent=text;return li;}));
    const lines=(report.interfaces||[]).map(row=>`${row.name}：${row.address}/${row.prefix} · ${row.dhcp?'自动获取':'固定 IP'} · ${row.state} · ${row.rp_same_subnet?'与 RP 同网段':'与 RP 网段不匹配或尚未确认'}`);
+   for(const candidate of report.candidates||[])lines.push(`发现 ${candidate.address} · ${candidate.sources.join('、')}`);
    for(const check of report.checks||[])lines.push(`${check.interface} / ${check.source} → ${check.target}：MAC ${check.mac_matches?'匹配':'未匹配'}，SSH ${check.ssh_reachable?'可达':'不可达'}`);
    if(report.detail)lines.push(report.detail);
    if(report.local_error)lines.push(report.local_error);
@@ -41,5 +47,5 @@ export function mount(root,{info,cache}){
   }
  }
  window.addEventListener('connection-state',update);update();
- return ()=>window.removeEventListener('connection-state',update);
+ return ()=>{disposeNetwork();window.removeEventListener('connection-state',update);};
 }
