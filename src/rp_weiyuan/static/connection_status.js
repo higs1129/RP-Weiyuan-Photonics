@@ -7,6 +7,7 @@ export function connectionStatus(info,cache,name){
  if(cache.connectionMonitorError)return {state:'checking',label:'状态未确认',stamp,detail:cache.connectionMonitorError};
  if(row?.ok===false)return {state:'error',label:'检查失败',stamp,detail:row.error};
  if(!connected)return {state:'unknown',label:'尚未连接',stamp,detail:row?.deferred||''};
+ if(name==='laser'&&info.laser_warning)return {state:'checking',label:'通信已通 · 开关状态未知',stamp,detail:info.laser_warning};
  if(cache.connectionMonitorDeferred||row?.deferred)return {state:'checking',label:'待检查',stamp,detail:cache.connectionMonitorDeferred||row.deferred};
  if(row?.ok===true&&Date.now()/1000-row.checked_at<=90)return {state:'ok',label:'连接正常',stamp,detail:'最近只读检查通过'};
  return {state:'checking',label:'待检查',stamp,detail:row?.checked_at?'上次检查已超过 90 秒':'等待首次只读检查'};

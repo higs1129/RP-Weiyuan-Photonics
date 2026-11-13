@@ -25,7 +25,7 @@ from rp_weiyuan.connection import UartSetup
 from rp_weiyuan.connection_monitor import ConnectionMonitor
 from rp_weiyuan.laser_profile import INITIAL
 from rp_weiyuan.laser_startup import start_debug
-from rp_weiyuan.laser_settings import set_confirmed
+from rp_weiyuan.laser_settings import set_confirmed, switch_warning
 from rp_weiyuan.live import LiveAcquisition
 from rp_weiyuan.native_observation import Observation
 from a221_workbench.tasks.redpitaya.restart_bridge import restart_bridge, stop_bridge
@@ -52,6 +52,7 @@ class Session:
         self.connection_monitor = ConnectionMonitor()
         self.laser_connected = False
         self.laser_error = None
+        self.laser_warning = 'TEC、LD 开关状态尚未读取；设定值读回不代表输出已开启。'
         self.connection_setup = {'stage': '尚未连接', 'network': None, 'uart': None}
         self.network_discovery = None
         self._network_report_time = 0
@@ -77,7 +78,7 @@ class Session:
         return result
 
     def _info(self):
-        return {'ok': True, 'simulated': False, 'host': self.rp.host, 'connected': self.rp.connected, 'periodic_burst_supported': bool(self.rp.connected and (self.rp.bridge_status or {}).get('excitation_protocol', 0) >= 3), 'excitation_supported': bool(self.rp.connected and (self.rp.bridge_status or {}).get('excitation_protocol', 0) >= 2), 'lock': self.lock.status(), 'lock_defaults': self.lock.defaults, 'laser_connected': self.laser_connected, 'laser_error': self.laser_error, 'bridge_url': self.rp.client.base, 'rp_address': (self.rp.bridge_status or {}).get('bridge', {}).get('hostname') if self.rp.connected else None, 'uart_url': getattr(self.laser.transport, 'base_url', None), 'laser_initial': INITIAL, 'source_version': self.config.get('source_version', ''), 'connection_health': self.connection_monitor.snapshot(), 'connection_diagnostics': self.connection_setup.get('diagnostics'), 'input_ranges': self.input_ranges, 'rf_chain': self.config.get('rf_chain'), 'rf_correction_expected': self.rf_correction, 'rf_correction_readback': self.rf_readback}
+        return {'ok': True, 'simulated': False, 'host': self.rp.host, 'connected': self.rp.connected, 'periodic_burst_supported': bool(self.rp.connected and (self.rp.bridge_status or {}).get('excitation_protocol', 0) >= 3), 'excitation_supported': bool(self.rp.connected and (self.rp.bridge_status or {}).get('excitation_protocol', 0) >= 2), 'lock': self.lock.status(), 'lock_defaults': self.lock.defaults, 'laser_connected': self.laser_connected, 'laser_error': self.laser_error, 'laser_warning': self.laser_warning, 'bridge_url': self.rp.client.base, 'rp_address': (self.rp.bridge_status or {}).get('bridge', {}).get('hostname') if self.rp.connected else None, 'uart_url': getattr(self.laser.transport, 'base_url', None), 'laser_initial': INITIAL, 'source_version': self.config.get('source_version', ''), 'connection_health': self.connection_monitor.snapshot(), 'connection_diagnostics': self.connection_setup.get('diagnostics'), 'input_ranges': self.input_ranges, 'rf_chain': self.config.get('rf_chain'), 'rf_correction_expected': self.rf_correction, 'rf_correction_readback': self.rf_readback}
 
     def check_rf_correction(self, *, apply=False):
         if self.rf_correction is not None:
@@ -118,10 +119,16 @@ class Session:
             try:
                 self.prepare_laser_transport(ensure_service=activate or not self.laser_connected)
                 self.connection_setup['stage'] = '正在读取激光器状态'
-                status = self.laser.read_status()
-                if activate:
+                status = self.laser.read_status(allow_unknown_switches=True)
+                warning = switch_warning(status)
+                activated = False
+                if activate and not warning:
                     self.connection_setup['stage'] = '通信已确认，正在执行激光器启动'
                     status = start_debug(self.laser, status)
+                    activated = True
+                elif activate:
+                    warning += ' 本次未执行自动启动，未切换模式或开关输出。'
+                status['switch_warning'] = warning
             except Exception as exc:
                 self._laser_transport_cache = None
                 self.laser_connected = False
@@ -132,10 +139,12 @@ class Session:
                 raise
             self.laser_connected = True
             self.laser_error = None
+            self.laser_warning = warning
             self.connection_setup.pop('diagnostics', None)
             self.connection_monitor.record('laser', True)
-            self.connection_setup['stage'] = 'RP 与微源通信已确认'
-            return {'ok': True, 'status': status, 'simulated': False}
+            self.connection_setup['stage'] = warning or 'RP 与微源通信已确认'
+            return {'ok': True, 'status': status, 'warning': warning,
+                    'activated': activated, 'simulated': False}
 
     def set_laser(self, action, body):
         if action == 'laser/initialize':
@@ -173,7 +182,7 @@ class Session:
             # A full status adds ten serial round trips without making the write
             # more current. Leave measured values explicitly stale until requested.
             (self.laser_connected, self.laser_error) = (True, None)
-            return {'ok': True, 'status': None, 'confirmed': confirmed, 'warning': None,
+            return {'ok': True, 'status': None, 'confirmed': confirmed, 'warning': self.laser_warning,
                     'applied': applied, 'simulated': False}
 
     def _restart_backend(self, host):

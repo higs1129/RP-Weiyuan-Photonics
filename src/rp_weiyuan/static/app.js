@@ -43,7 +43,7 @@ async function refresh(){
  document.querySelector('#rpState').textContent='RP · '+(info.connected?'已连接'+(info.rp_address?' · '+info.rp_address:''):'未连接');
  document.querySelector('#rpState').title=info.bridge_url?'当前控制后台：'+info.bridge_url:'';
  document.querySelector('#laserState').textContent='激光器 · '+(info.laser_connected?'已读回':'未连接');
- document.querySelector('#laserState').title=info.laser_error||'';
+ document.querySelector('#laserState').title=info.laser_error||info.laser_warning||'';
  document.querySelector('#pyrpl').disabled=info.simulated;
  document.querySelector('#hidePyrpl').disabled=info.simulated;
  document.querySelector('#uartSetup').hidden=info.simulated||!['','#connection'].includes(location.hash);
@@ -75,7 +75,8 @@ async function connectDevices(){
  if(result.setup?.uart?.warning)notes.push(result.setup.uart.warning);
  if(result.setup?.uart?.persistent)notes.push('串口服务已设为开机启动');
  if(result.setup?.uart?.credential_synced)notes.push('已核验并同步 RP 现有串口凭据');
-  status((result.laser?.ok?'RP 与激光器通信正常；已进入调试模式，TEC / LD 已开启':'RP 已连接；激光器通信或启动未完成：'+result.laser?.error)+(notes.length?'。'+notes.join('；'):''),!result.laser?.ok);
+  const laserMessage=result.laser?.ok?(result.laser.activated?'RP 与激光器通信正常；已进入调试模式，TEC / LD 已开启':'RP 与激光器通信已确认；'+(result.laser.warning||'未执行自动启动')):'RP 已连接；激光器通信或启动未完成：'+result.laser?.error;
+  status(laserMessage+(notes.length?'。'+notes.join('；'):''),!result.laser?.ok||Boolean(result.laser?.warning));
 }catch(e){cache.connectionError=e.message;}finally{
  clearInterval(progress);
  cache.checkingConnections=false;cache.connectionCheckedAt=new Date().toLocaleString();
@@ -104,7 +105,7 @@ document.querySelector('#deployUart').onclick=async()=>{try{
 }catch{}};
 document.querySelector('#verifyLaser').onclick=async()=>{try{
  const result=await api('laser/status');cache.laser={status:result.status,time:new Date().toLocaleTimeString()};
- document.querySelector('#uartResult').textContent=JSON.stringify(result.status,null,2);status('已收到激光器真实状态读回');render();
+ document.querySelector('#uartResult').textContent=JSON.stringify(result.status,null,2);status(result.warning||'已收到激光器真实状态读回',Boolean(result.warning));render();
 }catch{}finally{await refresh();}};
 let cleanup;
 function render(){

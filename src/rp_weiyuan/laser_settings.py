@@ -8,6 +8,15 @@ from a221_workbench.instruments.weiyuan import (
 )
 
 
+def switch_warning(status):
+    missing = [name for name, key in [('TEC', 'tec_enabled'), ('LD', 'ld_enabled')]
+               if status.get(key) is None]
+    if not missing:
+        return None
+    return ('无法读取 ' + '、'.join(missing) + ' 开关状态，当前显示为未知；'
+            '仍可读取和设置温度、电流，设定值读回不代表输出已开启。')
+
+
 def set_confirmed(laser, field, value):
     try:
         mode = laser.read_mode()

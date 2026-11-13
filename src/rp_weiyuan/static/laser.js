@@ -39,7 +39,8 @@ export function mount(root,{api,cache,info}){
   const enabled=value=>value===true?'已开启':value===false?'已关闭':'未知';
   $('tecEnabled').textContent=(stale?'上次 ':'')+'TEC 温控：'+enabled(s.tec_enabled);
   $('ldEnabled').textContent=(stale?'上次 ':'')+'LD 电流输出：'+enabled(s.ld_enabled);
-  $('laserOperatingNote').textContent=stale?'实际值及 TEC / LD 开关显示的是上次读数，请点击“读取一次”刷新。':s.tec_enabled===false?'TEC 已关闭：可写入温度设定值，但不会自动调温。“运行”是控制模式，不代表温控已开启。':s.ld_enabled===false?'LD 输出已关闭，实际电流不会跟随设定值。':'';
+  const switchNote=s.switch_warning||info.laser_warning||'';
+  $('laserOperatingNote').textContent=[switchNote,stale?'实际值及 TEC / LD 开关显示的是上次读数，请点击“读取一次”刷新。':s.tec_enabled===false?'TEC 已关闭：可写入温度设定值，但不会自动调温。“运行”是控制模式，不代表温控已开启。':s.ld_enabled===false?'LD 输出已关闭，实际电流不会跟随设定值。':''].filter(Boolean).join(' ');
   $('detail').textContent=JSON.stringify(s,null,2);
  }
  function enqueue(action,body){
@@ -52,7 +53,8 @@ export function mount(root,{api,cache,info}){
   try{
    const result=await enqueue('laser/status',{});
    if(!result||disposed)return;
-   show(result.status);state('单次读取完成');
+   info.laser_warning=result.warning||null;
+   show(result.status);state(result.warning||'单次读取完成',Boolean(result.warning));
   }catch(e){
    if(!disposed){
     if(cache.laser){cache.laser.stale=true;showCached();}
@@ -78,7 +80,7 @@ export function mount(root,{api,cache,info}){
    const labels=[];
    if(Number.isFinite(confirmed?.tec_set_temp_c))labels.push('温度设定 '+confirmed.tec_set_temp_c.toFixed(2)+' ℃');
    if(Number.isFinite(confirmed?.ld_set_current_ma))labels.push('电流设定 '+confirmed.ld_set_current_ma.toFixed(2)+' mA');
-   state(result.warning||(labels.length?labels.join('；')+' 已读回确认；实际值不自动刷新':'设置已读回'),Boolean(result.warning));
+   state((labels.length?labels.join('；')+' 已读回确认；实际值不自动刷新':'设置已读回')+(result.warning?'。'+result.warning:''),Boolean(result.warning));
   }catch(e){
    if(!disposed){
     if(cache.laser){cache.laser.stale=true;showCached();}
