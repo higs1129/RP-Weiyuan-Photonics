@@ -2,13 +2,31 @@
 
 from __future__ import annotations
 import math
+import time
 from a221_workbench.instruments.weiyuan import REG_TEC_SET_DEBUG, REG_LD_SET_DEBUG, STATE_TEC, STATE_LD
 from .laser_profile import INITIAL
+
+
+def _enable_and_confirm(laser, register, mask, enable, label, *, timeout_s=5.0):
+    """Send at most one enable command; allow delayed firmware readback."""
+    if laser.read_state_value(register) & mask:
+        return
+    enable(True)
+    deadline = time.monotonic() + timeout_s
+    while True:
+        state = laser.read_state_value(register)
+        if state & mask:
+            return
+        if time.monotonic() >= deadline:
+            raise RuntimeError(f'{label} 开启指令已发送，但 {timeout_s:g} 秒内未确认开启；未重发')
+        time.sleep(0.2)
 
 
 def start_debug(laser, previous):
     stage = '准备调试模式设定值'
     try:
+        if any(previous.get(key) is None for key in ('tec_enabled', 'ld_enabled')):
+            raise RuntimeError('TEC/LD 状态未知，未自动启动')
         targets = {}
         for field, key, register, method in [
             ('temperature', 'tec_set_temp', REG_TEC_SET_DEBUG, laser.set_temperature_c),
@@ -29,13 +47,9 @@ def start_debug(laser, previous):
         if laser.read_mode() != 1:
             raise RuntimeError('模式读回不一致')
         stage = '开启 TEC 温控'
-        if not laser.read_state_value(STATE_TEC) & 2:
-            laser.set_tec_enabled(True)
-        if not laser.read_state_value(STATE_TEC) & 2:
-            raise RuntimeError('TEC 尚未确认开启，未继续开启 LD')
+        _enable_and_confirm(laser, STATE_TEC, 2, laser.set_tec_enabled, 'TEC')
         stage = '开启 LD 电流输出'
-        if not laser.read_state_value(STATE_LD) & 4:
-            laser.set_ld_enabled(True)
+        _enable_and_confirm(laser, STATE_LD, 4, laser.set_ld_enabled, 'LD')
         stage = '确认最终状态'
         result = laser.read_status()
         if result['mode'] != 1 or not result['tec_enabled'] or not result['ld_enabled']:
